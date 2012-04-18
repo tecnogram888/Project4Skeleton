@@ -30,6 +30,8 @@
 package edu.berkeley.cs162;
 
 import java.io.Serializable;
+import java.util.Hashtable;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * This class defines the salve key value servers. Each individual KeyServer 
@@ -45,26 +47,93 @@ public class KeyServer<K extends Serializable, V extends Serializable> implement
 	private KVStore<K, V> dataStore = null;
 	private KVCache<K, V> dataCache = null;
 	
+	private Hashtable<K, ReentrantReadWriteLock> lockstore;
+	
 	/**
 	 * @param cacheSize number of entries in the data Cache.
 	 */
 	public KeyServer(int cacheSize) {
 		// implement me
+		dataStore = new KVStore<K, V>();
+		dataCache = new KVCache<K, V>(cacheSize);
+		lockstore = new Hashtable<K, ReentrantReadWriteLock>();
 	}
 	
 	public boolean put(K key, V value) throws KVException {
 		// implement me
-		return false;
+		if (lockstore.get(key) == null) lockstore.put(key, new ReentrantReadWriteLock());//This way, whatever method we call, if the lock does not exist it is created
+		
+		lockstore.get(key).writeLock().lock();
+		boolean ret = false;
+		try{
+		ret = dataStore.put(key, value);//Access Store first so if an error is thrown, the Cache is not touched
+		} catch (KVException e){
+			lockstore.get(key).writeLock().unlock();
+			throw new KVException(new KVMessage("IO Error"));
+		}
+		dataCache.put(key, value);
+		lockstore.get(key).writeLock().unlock();	
+		
+		return ret;
 	}
 	
 	public V get (K key) throws KVException {
 		// implement me
-		return null;
+	if (lockstore.get(key) == null) lockstore.put(key, new ReentrantReadWriteLock());
+		
+		lockstore.get(key).readLock().lock();
+		V val = dataCache.get(key);
+		lockstore.get(key).readLock().unlock();
+		
+		if (val != null){
+			//This line of code is for testing only, it breaks most things
+			//System.out.println("Cache: " + val.toString() + " Store: " + dataStore.get(key).toString());
+			return val;
+		} else {
+			lockstore.get(key).readLock().lock();
+			try {
+			val = dataStore.get(key);
+			} catch (KVException e){
+				lockstore.get(key).readLock().unlock();
+				throw new KVException(new KVMessage("IO Error"));
+			}
+			lockstore.get(key).readLock().unlock();
+			if (val == null) {
+				throw new KVException(new KVMessage("Does not exist"));
+			}
+			lockstore.get(key).writeLock().lock();
+			dataCache.put(key, val);
+			lockstore.get(key).writeLock().unlock();
+		}
+		
+		return val;
 	}
 
 	@Override
 	public void del(K key) throws KVException {
-		// implement me		
+		// implement me	
+		if (lockstore.get(key) == null) lockstore.put(key, new ReentrantReadWriteLock());
+		
+		lockstore.get(key).readLock().lock();
+//		try {
+		if (dataCache.get(key) == null && dataStore.get(key) == null){
+			//HOLY SHIT THIS BUG TOOK SO FUCKING LONG TO FIND
+			lockstore.get(key).readLock().unlock();
+			throw new KVException(new KVMessage("Does not exist"));
+		}
+/*		} catch (KVException e){
+			throw new KVException(new KVMessage("IO Error"));
+		}*/
+		lockstore.get(key).readLock().unlock();
+		lockstore.get(key).writeLock().lock();
+		try {
+		dataStore.del(key);//Access Store first so if an error is thrown, the Cache is not touched
+		} catch (KVException e){
+			lockstore.get(key).writeLock().unlock();
+			throw new KVException(new KVMessage("IO Error"));
+		}
+		dataCache.del(key);
+		lockstore.get(key).writeLock().unlock();
 	}
 }
 
