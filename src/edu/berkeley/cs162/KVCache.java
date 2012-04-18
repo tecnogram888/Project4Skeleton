@@ -28,6 +28,9 @@
 package edu.berkeley.cs162;
 
 import java.io.Serializable;
+import java.util.Hashtable;
+import java.util.LinkedList;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * An LRU cache which has a fixed maximum number of elements (cacheSize).
@@ -35,13 +38,20 @@ import java.io.Serializable;
  */
 public class KVCache<K extends Serializable, V extends Serializable> implements KeyValueInterface<K, V>{
 	private int cacheSize;
-
+	private Hashtable<K, V> cacheStructure;
+	private LinkedList<K> orderAccessed;
+	private Hashtable<K, ReentrantReadWriteLock> accessLocks;
+	
 	/**
 	 * Creates a new LRU cache.
 	 * @param cacheSize the maximum number of entries that will be kept in this cache.
 	 */
 	public KVCache (int cacheSize) {
 		// implement me
+		this.cacheSize = cacheSize;
+		cacheStructure = new Hashtable<K, V>();
+		orderAccessed = new LinkedList<K>();
+		accessLocks = new Hashtable<K, ReentrantReadWriteLock>();
 	}
 
 	/**
@@ -52,7 +62,19 @@ public class KVCache<K extends Serializable, V extends Serializable> implements 
 	 */
 	public V get (K key) {
 		// implement me
-		return null;
+		if (accessLocks.get(key) == null) { return null; }
+		
+		accessLocks.get(key).readLock().lock();
+		V tempValue = cacheStructure.get(key);
+		accessLocks.get(key).readLock().unlock();
+		if ( tempValue == null ) { return null; }
+		else {
+			accessLocks.get(key).writeLock().lock();
+			orderAccessed.remove( key );
+			orderAccessed.addFirst( key );
+			accessLocks.get(key).writeLock().unlock();
+			return tempValue;
+		}
 	}
 
 	/**
@@ -66,6 +88,26 @@ public class KVCache<K extends Serializable, V extends Serializable> implements 
 	 */
 	public boolean put (K key, V value) {
 		// implement me
+		if (accessLocks.get(key) == null) { 
+			accessLocks.put(key, new ReentrantReadWriteLock()); 
+		}
+		
+		accessLocks.get(key).writeLock().lock();
+		if (get(key) != null) { 
+			if (get(key) == value) { return true; }
+			orderAccessed.remove( key );
+			orderAccessed.addFirst( key );
+			cacheStructure.remove( key );
+			cacheStructure.put( key, value);
+			accessLocks.get(key).writeLock().unlock();
+			return true;
+		}
+		if ( (orderAccessed.size() + 1) > cacheSize ) {
+			del( orderAccessed.removeLast() );
+		}
+		orderAccessed.addFirst( key );
+		cacheStructure.put( key, value);
+		accessLocks.get(key).writeLock().unlock();
 		return false;
 	}
 
@@ -75,5 +117,12 @@ public class KVCache<K extends Serializable, V extends Serializable> implements 
 	 */
 	public void del (K key) {
 		// implement me
+		if (accessLocks.get(key) == null) return;
+		
+		accessLocks.get(key).writeLock().lock();
+		orderAccessed.remove( key );
+		cacheStructure.remove( key );
+		accessLocks.get(key).writeLock().unlock();
+		accessLocks.remove(key);
 	}
 } // end class LRUCache
