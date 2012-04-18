@@ -29,11 +29,15 @@
  */
 package edu.berkeley.cs162;
 
+import java.util.LinkedList;
+
+
 public class ThreadPool {
 	/**
 	 * Set of threads in the threadpool
 	 */
-	protected Thread threads[] = null;
+	protected Thread threads[];
+	protected LinkedList<Runnable> tasks;
 
 	/**
 	 * Initialize the number of threads required in the threadpool. 
@@ -43,17 +47,25 @@ public class ThreadPool {
 	public ThreadPool(int size)
 	{
 		// implement me
+		tasks = new LinkedList<Runnable>();
+		threads = new Thread[size];
+		for (int i=0;i<size;i++) {
+			threads[i] = new WorkerThread(this);
+			threads[i].start();
+		}
 	}
 
 	/**
 	 * Add a job to the queue of tasks that has to be executed. As soon as a thread is available, 
 	 * it will retrieve tasks from this queue and start processing.
-	 * @param r job that has to be executed asynchronously
+	 * @param r job that has to be executed asynchronously 
 	 * @throws InterruptedException 
 	 */
-	public void addToQueue(Runnable r) throws InterruptedException
+	public synchronized void addToQueue(Runnable r) throws InterruptedException
 	{
 		// implement me
+		tasks.add(r);
+		this.notify();
 	}
 }
 
@@ -64,9 +76,14 @@ class WorkerThread extends Thread {
 	/**
 	 * @param o the thread pool 
 	 */
+	ThreadPool pool;
+	Runnable r;
+	
 	WorkerThread(ThreadPool o)
 	{
 		// implement me
+		pool = o;
+		
 	}
 
 	/**
@@ -75,5 +92,20 @@ class WorkerThread extends Thread {
 	public void run()
 	{
 		// implement me
+		while (true){
+			if (!pool.tasks.isEmpty()) {
+				r = pool.tasks.poll();
+				r.run();
+			} else {
+				try {
+					synchronized(pool){
+					pool.wait();
+					}
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 }
