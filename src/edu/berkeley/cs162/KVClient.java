@@ -145,7 +145,7 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 			throw new KVException(new KVMessage(message.getMessage()));
 		} else {
 			if (message.getValue() == null) throw new KVException(new KVMessage("Unknown Error: Get received \"null\" in value in the response"));
-			return (V)message.decodeValue();
+			return (V)KVMessage.decodeObject(message.getValue());
 		}
 	}
 

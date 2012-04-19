@@ -341,63 +341,6 @@ public class KVMessage implements Serializable {
 	}
 	
 	/**
-	 * http://stackoverflow.com/questions/20778/how-do-you-convert-binary-data-to-strings-and-back-in-java
-	 * http://stackoverflow.com/questions/2836646/java-serializable-object-to-byte-array
-	 * @throws KVException Over Sized Value
-	 */
-	public Object decodeValue() throws KVException{
-		
-			byte[] unMarshalled = DatatypeConverter.parseBase64Binary(value);
-
-			// make sure the length of the byte array is less than 128KB
-			if (unMarshalled.length > 128 * java.lang.Math.pow(2,10)) {
-				throw new KVException(new KVMessage("Over sized value"));
-			}
-			
-			ByteArrayInputStream bis = new ByteArrayInputStream(unMarshalled);
-		    ObjectInput in;
-			try {
-				in = new ObjectInputStream(bis);
-			
-		    Object deserialized = in.readObject();
-		    bis.close();
-		    in.close();
-		    return deserialized;
-			} catch (IOException e) {
-				throw new KVException(new KVMessage("Unknown Error: Could not deserialize value"));
-			} catch (ClassNotFoundException e) {
-				throw new KVException(new KVMessage("Unknown Error: Could not deserialize value"));
-			}
-	}
-	
-	/**
-	 * http://stackoverflow.com/questions/20778/how-do-you-convert-binary-data-to-strings-and-back-in-java
-	 * http://stackoverflow.com/questions/2836646/java-serializable-object-to-byte-array
-	 * @throws KVException Over Sized Value
-	 */
-	public Object decodeKey() throws KVException{
-		try {
-			byte[] unMarshalled = DatatypeConverter.parseBase64Binary(key);
-
-			// make sure the length of the byte array is less than 128KB
-			if (unMarshalled.length > 256) {
-				throw new KVException(new KVMessage("Over sized value"));
-			}
-			
-			ByteArrayInputStream bis = new ByteArrayInputStream(unMarshalled);
-		    ObjectInput in = new ObjectInputStream(bis);
-		    Object deserialized = in.readObject();
-		    bis.close();
-		    in.close();
-		    return deserialized;
-		} catch (IOException e) {
-			throw new KVException(new KVMessage("Unknown Error: Could not deserialize key"));
-		} catch (ClassNotFoundException e) {
-			throw new KVException(new KVMessage("Unknown Error: Could not deserialize key"));
-		}
-	}
-
-	/**
 	 * Decode base64 String to Object
 	 * @param str
 	 * @return
