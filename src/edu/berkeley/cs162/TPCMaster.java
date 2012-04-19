@@ -57,6 +57,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			String slaveIDString = slaveInfo.substring(0,indexAT);
 			String hostName = slaveInfo.substring(indexAT+1, indexCOLON);
 			String portString = slaveInfo.substring(indexCOLON + 1);
+			int slaveID, port;
 			try{
 				slaveID = Integer.parseInt(slaveIDString);
 				port = Integer.parseInt(portString);
@@ -67,6 +68,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 			this.slaveID = slaveID;
 			this.port = port;
+			this.hostName = hostName;
 		}
 		
 		public int getSlaveID() {
