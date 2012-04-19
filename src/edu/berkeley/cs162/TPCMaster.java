@@ -50,7 +50,23 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		 * @throws KVException
 		 */
 		public SlaveInfo(String slaveInfo) throws KVException {
-			// implement me
+			// added by luke
+			int indexAT = slaveInfo.indexOf("@");
+			int indexCOLON= slaveInfo.indexOf(":");
+			// indexAT is not included
+			String slaveIDString = slaveInfo.substring(0,indexAT);
+			String hostName = slaveInfo.substring(indexAT+1, indexCOLON);
+			String portString = slaveInfo.substring(indexCOLON + 1);
+			try{
+				slaveID = Integer.parseInt(slaveIDString);
+				port = Integer.parseInt(portString);
+			} catch (NumberFormatException e){
+				e.printStackTrace();
+				System.err.println("NumberFormatException in SlaveInfo constructor");
+				throw new KVException(new KVMessage("Registration Error: Received unparseable slave information"));
+			}
+			this.slaveID = slaveID;
+			this.port = port;
 		}
 		
 		public int getSlaveID() {
