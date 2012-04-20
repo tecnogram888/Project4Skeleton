@@ -70,7 +70,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		 * @throws KVException
 		 */
 		public SlaveInfo(String slaveInfo) throws KVException {
-			/*
+			
 			// added by luke
 			int indexAT = slaveInfo.indexOf("@");
 			int indexCOLON= slaveInfo.indexOf(":");
@@ -78,19 +78,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			String slaveIDString = slaveInfo.substring(0,indexAT);
 			String hostName = slaveInfo.substring(indexAT+1, indexCOLON);
 			String portString = slaveInfo.substring(indexCOLON + 1);
-			int slaveID, port;
+			UUID slaveID;
+			int port;
 			try{
-				slaveID = Integer.parseInt(slaveIDString);
+				slaveID = UUID.fromString(slaveIDString);
 				port = Integer.parseInt(portString);
-			} catch (NumberFormatException e){
+			} catch (IllegalArgumentException e){
 				e.printStackTrace();
-				System.err.println("NumberFormatException in SlaveInfo constructor");
+				System.err.println("IllegalArgumentException in SlaveInfo constructor");
 				throw new KVException(new KVMessage("Registration Error: Received unparseable slave information"));
 			}
 			this.slaveID = slaveID;
 			this.port = port;
 			this.hostName = hostName;
-			*/
 		}
 		
 		public UUID getSlaveID() {
