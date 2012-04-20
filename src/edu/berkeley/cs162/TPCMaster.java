@@ -34,6 +34,7 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.TreeSet;
+import java.util.UUID;
 
 public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
@@ -57,7 +58,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 	
 	private class SlaveInfo {
-		private int slaveID = -1;
+		private UUID slaveID = null;
 		private String hostName = null;
 		private int port = -1;
 		private KVClient<K, V> kvClient = null;
@@ -69,6 +70,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		 * @throws KVException
 		 */
 		public SlaveInfo(String slaveInfo) throws KVException {
+			/*
 			// added by luke
 			int indexAT = slaveInfo.indexOf("@");
 			int indexCOLON= slaveInfo.indexOf(":");
@@ -88,9 +90,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			this.slaveID = slaveID;
 			this.port = port;
 			this.hostName = hostName;
+			*/
 		}
 		
-		public int getSlaveID() {
+		public UUID getSlaveID() {
 			return slaveID;
 		}
 
@@ -133,8 +136,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	/**
 	 * Start registration server in a separate thread
-	 * 
-	 * @throws IOException
 	 */
 	public void run() {
 		// implement me
