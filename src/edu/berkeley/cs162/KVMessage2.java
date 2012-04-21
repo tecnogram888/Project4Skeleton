@@ -71,11 +71,9 @@ public class KVMessage2 implements Serializable {
 	private String msgType = null;
 	private String key = null;
 	private String value = null;
-	private boolean status = false;
 	// Skeleton: private String status = null;
 	private String message = null;
 	private String tpcOpId = null;
-	private boolean isPutResp = false;
 
 	// TODO fix this
 /*	public KVMessage(String msgType) {
@@ -108,7 +106,7 @@ public class KVMessage2 implements Serializable {
 		}
 	}
 	
-	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, and Server response
+	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, and Server response
 	public KVMessage2(String msgType, String tpcOpIdORmessage) {
 		this.msgType = msgType;
 		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType)){
@@ -124,12 +122,10 @@ public class KVMessage2 implements Serializable {
 		
 	}
 	
-	
 	public KVMessage2(KVMessage2 kvm) {
 		this.msgType = kvm.msgType;
 		this.key = kvm.key;
 		this.value = kvm.value;
-		this.status = kvm.status;
 		this.message = kvm.message;
 		this.tpcOpId = kvm.tpcOpId;
 	}
@@ -145,13 +141,14 @@ public class KVMessage2 implements Serializable {
 	public String getValue(){
 		return value;
 	}
-	
-	public boolean getStatus(){
-		return status;
-	}
+
 	
 	public String getMessage(){
 		return message;
+	}
+	
+	public String getTpcOpId(){
+		return tpcOpId;
 	}
 	
 	public boolean hasEmptyKey(){
@@ -177,6 +174,15 @@ public class KVMessage2 implements Serializable {
 		Node nValue = (Node) nlList.item(0);
 
 		return nValue.getNodeValue();
+	}
+	
+	public String getElementsTag (String tag, Element x){
+		NodeList nodeList = x.getElementsByTagName(tag);
+		if (nodeList.getLength() != 0){ 
+			return getTagValue(tag, x);
+		} else {
+			return null;
+		}
 	}
 	
 	/**
@@ -212,86 +218,17 @@ public class KVMessage2 implements Serializable {
 			Element typeElement = (Element) typeNode;
 
 			msgType = typeElement.getAttribute("type");
-			if (msgType.equals("resp")){ // KVMessage is an incoming response from the server
-				NodeList statusList = typeElement.getElementsByTagName("Status");
-				if (statusList.getLength() != 0){ 
-					String temp = getTagValue("Status", typeElement);
-					if (temp.equals("True")){ status = true;}
-					else{ status = false;}
-				}
-				
-				NodeList messageList = typeElement.getElementsByTagName("Message");
-				if (messageList.getLength() != 0){ 
-					message = getTagValue("Message", typeElement);
-				} else{
-					key = getTagValue("Key", typeElement);
-					value = getTagValue("Value", typeElement);
-				}
-				
-			} else { // KVMessage is an outgoing message to the server
-				key = getTagValue("Key", typeElement);
-				NodeList valueList = typeElement.getElementsByTagName("Value");
-				if (valueList.getLength() != 0){
-					value = getTagValue("Value", typeElement);
-				}
-				
-				if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
-			}
+			
+			key = getElementsTag("Key", typeElement);
+			
+			value = getElementsTag("Value", typeElement);
+			
+			message = getElementsTag("Message", typeElement);
+		
+			// TODO Do error checking?
+			if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
 	}
 
-	public KVMessage2(InputStream input, boolean isPart4) throws KVException{
-		DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
-		DocumentBuilder docBuilder;
-		try {
-			docBuilder = docBuilderFactory.newDocumentBuilder();
-		} catch (ParserConfigurationException e) {
-			throw new KVException(new KVMessage("Unknown Error: Invalid parser config"));
-		}
-		Document doc = null;
-		try {
-			doc = docBuilder.parse(new NoCloseInputStream(input));
-		} catch (SAXException e) {
-			throw new KVException(new KVMessage("XML Error: Received unparseable message"));
-		} catch (IOException e) {
-			e.printStackTrace();
-			throw new KVException(new KVMessage("XML Error: Received unparseable message"));
-		}
-		
-		doc.getDocumentElement().normalize();
-		
-		// messageList should be a NodeList with only ONE Node
-		NodeList typeList = doc.getElementsByTagName("KVMessage");
-		
-		Node typeNode = typeList.item(0);
-		Element typeElement = (Element) typeNode;
-
-		msgType = typeElement.getAttribute("type");
-		if (msgType.equals("resp")){ // KVMessage is an incoming response from the server
-			NodeList statusList = typeElement.getElementsByTagName("Status");
-			if (statusList.getLength() != 0){ 
-				String temp = getTagValue("Status", typeElement);
-				if (temp.equals("True")){ status = true;}
-				else{ status = false;}
-			}
-			
-			NodeList messageList = typeElement.getElementsByTagName("Message");
-			if (messageList.getLength() != 0){ 
-				message = getTagValue("Message", typeElement);
-			} else{
-				key = getTagValue("Key", typeElement);
-				value = getTagValue("Value", typeElement);
-			}
-			
-		} else { // KVMessage is an outgoing message to the server
-			key = getTagValue("Key", typeElement);
-			NodeList valueList = typeElement.getElementsByTagName("Value");
-			if (valueList.getLength() != 0){
-				value = getTagValue("Value", typeElement);
-			}
-			
-			if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
-		}
-}
 	/**
 	 * Generate the XML representation for this message.
 	 * @return the XML String
@@ -327,6 +264,7 @@ public class KVMessage2 implements Serializable {
             	text = doc.createTextNode(key);
             	keyElement.appendChild(text);
             }
+            
             if (value != null){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Value");
@@ -336,16 +274,7 @@ public class KVMessage2 implements Serializable {
                 text = doc.createTextNode(value);
                 valueElement.appendChild(text);
             }
-            if (isPutResp){
-            	//create child element, add an attribute, and add to root
-                Element valueElement = doc.createElement("Status");
-                root.appendChild(valueElement);
-
-                //add a text element to the child
-                if (status) text = doc.createTextNode("True");
-                else text = doc.createTextNode("False");
-                valueElement.appendChild(text);
-            }
+            
             if (message != null){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Message");
@@ -353,6 +282,16 @@ public class KVMessage2 implements Serializable {
 
                 //add a text element to the child
                 text = doc.createTextNode(message);
+                valueElement.appendChild(text);
+            }
+            
+            if (tpcOpId != null){
+            	//create child element, add an attribute, and add to root
+                Element valueElement = doc.createElement("TPCOpId");
+                root.appendChild(valueElement);
+
+                //add a text element to the child
+                text = doc.createTextNode(tpcOpId);
                 valueElement.appendChild(text);
             }
             /////////////////////////////
