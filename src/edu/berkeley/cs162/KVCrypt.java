@@ -44,6 +44,7 @@ public class KVCrypt {
 
     public void setUp() throws Exception {
     	// implement me
+    	cipher = Cipher.getInstance(algorithm);
     }
 
     public byte[] encrypt(String input)
