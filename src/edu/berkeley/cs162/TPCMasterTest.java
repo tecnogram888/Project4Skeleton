@@ -8,7 +8,7 @@ public class TPCMasterTest {
 
 	@Test
 	public void test() {
-		
+		fail("Not yet implemented");
 	}
 
 }
