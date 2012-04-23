@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 
@@ -119,6 +121,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	private Long tpcOpId = 0L;
 	
+	private SortedMap<Integer, SlaveInfo> consistentHash = new TreeMap<Integer, SlaveInfo>();
+	
 	/**
 	 * Creates TPCMaster where SlaveServers actually register
 	 * 
@@ -141,14 +145,20 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// implement me
 	}
 	
+	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
+		consistentHash.put(newSlave.getSlaveID().hashCode(), newSlave);
+	}
+	
 	/**
 	 * Find first replica location
 	 * @param key
 	 * @return
 	 */
-	private SlaveInfo findFirstReplica(K key) {
+	private synchronized SlaveInfo findFirstReplica(K key) {
 		// implement me
-		return null;
+		if (consistentHash.isEmpty()) { return null; }
+		return consistentHash.get(
+				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(key.hashCode()) );
 	}
 	
 	/**
@@ -156,9 +166,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param firstReplica
 	 * @return
 	 */
-	private SlaveInfo findSuccessor(SlaveInfo firstReplica) {
+	private synchronized SlaveInfo findSuccessor(SlaveInfo firstReplica) {
 		// implement me
-		return null;
+		if (consistentHash.isEmpty()) { return null; }
+		return consistentHash.get(
+				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(firstReplica.hashCode() + 1) );
 	}
 	
 	/**
