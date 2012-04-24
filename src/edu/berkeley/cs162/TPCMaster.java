@@ -37,6 +37,8 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
@@ -125,9 +127,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	private SocketServer clientServer = null;
 	
-	private Long currentTpcOpId = -1L;
-	
 	private ThreadPool threadpool = null;
+
+	private ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock();
+	
+	private Long currentTpcOpId = -1L;
+	private ReentrantLock transactionLock = new ReentrantLock();
+	private K transactionKey = null;
+	private boolean otherThreadDone = false;
+	private ReentrantLock otherThreadDoneLock = new ReentrantLock();
+	private boolean canCommit = false;
+	private ReentrantLock canCommitLock = new ReentrantLock();
+	private int TPCState = -1;
+	private ReentrantLock TPCStateLock = new ReentrantLock();
 	
 	/**
 	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers
@@ -184,17 +196,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(firstReplica.hashCode() + 1) );
 	}
 	
-	class putRunnable<K extends Serializable, V extends Serializable>implements Runnable {
+	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
 		K key;
 		V value;
 		KeyServer<K,V> keyserver;
 		Socket client;
 		KVMessage msg;
 		SlaveInfo slaveServerInfo;
+		boolean isPutReq;
 		
-		public putRunnable(KVMessage msg, SlaveInfo slaveServerInfo){
+		public processTPCOpRunnable(KVMessage msg, SlaveInfo slaveServerInfo, boolean isPutReq){
 			this.msg = msg;
 			this.slaveServerInfo = slaveServerInfo;
+			this.isPutReq = isPutReq;
 		}
 		@Override
 		public void run() {
@@ -228,23 +242,24 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	public synchronized boolean performTPCOperation(KVMessage msg, boolean isPutReq) throws KVException {
 		// implement me
+		transactionLock.lock();
+		
 		try {
 			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
-			if (isPutReq) {
-				threadpool.addToQueue(new putRunnable<K,V>(msg, firstReplica));
-				threadpool.addToQueue(new putRunnable<K,V>(msg, successor));
-			} else {
-				// addToQueue delRunnable
-			}
+			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, firstReplica, isPutReq));
+			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, successor, isPutReq));
 		} catch (InterruptedException e) {
 			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			transactionLock.unlock();
 			return false;
 		} catch (KVException e){
 			//sendMessage(client, e.getMsg());
+			transactionLock.unlock();
 			return false;
 		}
-		return false;
+		transactionLock.unlock();
+		return true;
 	}
 
 	public V handleGet(KVMessage msg) throws KVException {
