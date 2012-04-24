@@ -69,7 +69,7 @@ public class SlaveServer {
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting SlaveServer at " + server.getHostname() + ":" + server.getPort());
-		// fix me not to block *
+		// TODO fix me not to block *
 		////////////////////////////////////////////
 		////////////////////////////////////////////
 		////////////////////////////////////////////
