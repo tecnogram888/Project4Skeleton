@@ -33,6 +33,8 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
 
@@ -119,14 +121,25 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	private Long tpcOpId = 0L;
 	
+	private SortedMap<Integer, SlaveInfo> consistentHash = new TreeMap<Integer, SlaveInfo>();
+	
+	private SocketServer clientServer = null;
+	
+	private Long currentTpcOpId = -1L;
+	
+	private ThreadPool threadpool = null;
+	
 	/**
-	 * Creates TPCMaster where SlaveServers actually register
+	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers
+	 * actually register to let TPCMaster know their presence
 	 * 
+	 * @param listOfSlaves list of SlaveServers in "SlaveServerID@HostName:Port" format
 	 * @throws Exception
 	 */
-	public TPCMaster() throws Exception {
+	public TPCMaster(String[] listOfSlaves) throws Exception {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
+		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
 	}
 	
 	private String getNextTpcOpId() {
@@ -139,6 +152,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	public void run() {
 		// implement me
+		
+		
+	}
+	
+	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
+		consistentHash.put(newSlave.getSlaveID().hashCode(), newSlave);
 	}
 	
 	/**
@@ -146,9 +165,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param key
 	 * @return
 	 */
-	private SlaveInfo findFirstReplica(K key) {
+	private synchronized SlaveInfo findFirstReplica(K key) {
 		// implement me
-		return null;
+		if (consistentHash.isEmpty()) { return null; }
+		return consistentHash.get(
+				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(key.hashCode()) );
 	}
 	
 	/**
@@ -156,25 +177,80 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param firstReplica
 	 * @return
 	 */
-	private SlaveInfo findSuccessor(SlaveInfo firstReplica) {
+	private synchronized SlaveInfo findSuccessor(SlaveInfo firstReplica) {
 		// implement me
-		return null;
+		if (consistentHash.isEmpty()) { return null; }
+		return consistentHash.get(
+				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(firstReplica.hashCode() + 1) );
 	}
 	
+	class putRunnable<K extends Serializable, V extends Serializable>implements Runnable {
+		K key;
+		V value;
+		KeyServer<K,V> keyserver;
+		Socket client;
+		KVMessage msg;
+		SlaveInfo slaveServerInfo;
+		
+		public putRunnable(KVMessage msg, SlaveInfo slaveServerInfo){
+			this.msg = msg;
+			this.slaveServerInfo = slaveServerInfo;
+		}
+		@Override
+		public void run() {
+			boolean b = false;
+			try {
+				b = keyserver.put(key, value);
+			} catch (KVException e) {
+				KVClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			KVMessage message = new KVMessage(b, "Success");
+			KVClientHandler.sendMessage(client, message);
+			try {
+				client.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
+			}
+			
+		}
+
+	}
+
 	/**
 	 * Synchronized method to perform TPC operations one after another. 
 	 *  
 	 * @param msg
 	 * @param isPutReq
 	 * @return True if the TPC operation has succeeded
+	 * @throws KVException
 	 */
-	public synchronized boolean performTPCOperation(KVMessage msg, boolean isPutReq) {
+	public synchronized boolean performTPCOperation(KVMessage msg, boolean isPutReq) throws KVException {
 		// implement me
+		try {
+			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+			SlaveInfo successor = findSuccessor(firstReplica);
+			if (isPutReq) {
+				threadpool.addToQueue(new putRunnable<K,V>(msg, firstReplica));
+				threadpool.addToQueue(new putRunnable<K,V>(msg, successor));
+			} else {
+				// addToQueue delRunnable
+			}
+		} catch (InterruptedException e) {
+			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			return false;
+		} catch (KVException e){
+			//sendMessage(client, e.getMsg());
+			return false;
+		}
 		return false;
 	}
 
-	public V handleGet(KVMessage msg) {
+	public V handleGet(KVMessage msg) throws KVException {
 		// implement me
 		return null;
 	}
+	
+	
 }

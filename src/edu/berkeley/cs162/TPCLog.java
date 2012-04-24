@@ -59,6 +59,9 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	
 	public void appendAndFlush(KVMessage entry) {
 		// implement me
+		entries.add(entry);
+		this.flushToDisk();
+		// set state as ready and let coordinator know (HOW DO I DO THIS???)
 	}
 
 	@SuppressWarnings("unchecked")
@@ -108,5 +111,28 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	
 	public void rebuildKeyServer() throws KVException {
 		// implement me
+		this.loadFromDisk();
+		entries = this.getEntries();
+		for (int x = 0; x < entries.size(); x++) {
+//		while (!this.empty()) {
+			try {
+				KVMessage msg = entries.get(x);
+				if ((msg.getMsgType().equals("get"))) {
+					keyServer.get((K) msg.getKey());
+				}
+				if ((msg.getMsgType().equals("put"))) { //if message is abort, don't do anything
+					keyServer.put((K)msg.getKey(), (V)msg.getValue());
+				}
+				if ((msg.getMsgType().equals("delete"))) {
+					keyServer.del((K)msg.getKey());
+				}
+
+				if ((msg.getMsgType().equals("abort"))) {
+					// don't do anything
+				}
+			} catch (Exception e) {
+				throw new KVException (new KVMessage ("Error with KVMessage " + e));
+			}
+		}
 	}
 }

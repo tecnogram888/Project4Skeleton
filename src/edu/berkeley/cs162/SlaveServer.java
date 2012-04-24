@@ -49,8 +49,8 @@ public class SlaveServer {
 	 * @param args
 	 */
 	public static void main(String[] args) throws Exception {
-		if (args.length != 3) {
-			System.err.println("USAGE: SlaveServer <slaveID> <masterHostName> <masterPort> [masterListenPort]");
+	 	 if (args.length != 4) {
+	 	 	System.err.println("USAGE: SlaveServer <slaveID> <masterHostName> <masterPort> <registrationPort>");
 			System.exit(1);
 		}
 		
@@ -59,9 +59,7 @@ public class SlaveServer {
 		masterHostName = args[1];
 		masterPort = Integer.parseInt(args[2]);
 		
-		if (args.length == 4) {
-			registrationPort = Integer.parseInt(args[4]);
-		}
+		registrationPort = Integer.parseInt(args[3]);
 		
 		// Create TPCMasterHandler
 		System.out.println("Binding SlaveServer:");
@@ -71,6 +69,13 @@ public class SlaveServer {
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting SlaveServer at " + server.getHostname() + ":" + server.getPort());
+		// fix me not to block *
+		////////////////////////////////////////////
+		////////////////////////////////////////////
+		////////////////////////////////////////////
+		////////////////////////////////////////////
+		////////////////////////////////////////////
+		////////////////////////////////////////////
 		server.run();
 		
 		// Create TPCLog
