@@ -92,7 +92,6 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		} catch (KVException e) {
 			// should NOT ever throw exception here
 			e.printStackTrace();
-			fail();
 		}
 		try {
 			client.shutdownOutput();
