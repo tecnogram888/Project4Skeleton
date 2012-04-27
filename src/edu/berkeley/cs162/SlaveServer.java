@@ -40,25 +40,28 @@ public class SlaveServer {
 	static KeyServer<String, String> keyServer = null;
 	static SocketServer server = null;
 	
-	static UUID slaveID = null;
+	// 64-bit globally unique ID of this SlaveServer
+	static long slaveID = -1;	
+	// Name of the host Master/Coordinator Server is running on
 	static String masterHostName = null;
+	// Port which Master/Coordinator is listening to client requests
 	static int masterPort = -1;
+	// Port which Master/Coordinator is listening to for SlaveServers to register themselves
 	static int registrationPort = -1;
 	
 	/**
 	 * @param args
 	 */
 	public static void main(String[] args) throws Exception {
-	 	 if (args.length != 4) {
-	 	 	System.err.println("USAGE: SlaveServer <slaveID> <masterHostName> <masterPort> <registrationPort>");
+		if (args.length != 4) {
+			System.err.println("USAGE: SlaveServer <slaveID> <masterHostName> <masterPort> <registrationPort>");
 			System.exit(1);
 		}
 		
 		// Read Master info from command line
-		slaveID = UUID.fromString(args[0]);
+		slaveID = Long.parseLong(args[0]);
 		masterHostName = args[1];
 		masterPort = Integer.parseInt(args[2]);
-		
 		registrationPort = Integer.parseInt(args[3]);
 		
 		// Create TPCMasterHandler
@@ -69,17 +72,11 @@ public class SlaveServer {
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting SlaveServer at " + server.getHostname() + ":" + server.getPort());
-		// TODO fix me not to block *
-		////////////////////////////////////////////
-		////////////////////////////////////////////
-		////////////////////////////////////////////
-		////////////////////////////////////////////
-		////////////////////////////////////////////
-		////////////////////////////////////////////
+		// fix me not to block TODO
 		server.run();
 		
 		// Create TPCLog
-		logPath = server.getHostname() + ":" + server.getPort();
+		logPath = slaveID + "@" + server.getHostname();
 		tpcLog = new TPCLog<String, String>(logPath, keyServer);
 		
 		// Load from disk and rebuild logs

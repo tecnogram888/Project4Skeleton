@@ -42,29 +42,43 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
-	private class TPCRegistrationHandler implements NetworkHandler { 	
-	 	
-	    private ThreadPool threadpool = null;
+	/**
+	 * Implements NetworkHandler to handle registration requests from 
+	 * SlaveServers.
+	 * 
+	 */
+	private class TPCRegistrationHandler implements NetworkHandler {
 
-	    public TPCRegistrationHandler() {
-	    	// Call the other constructor
-	    	this(1);  
-	    }
-   
-	    public TPCRegistrationHandler(int connections) {
-	    	threadpool = new ThreadPool(connections);  
-	 	}
-	    
-	 	@Override 
-	 	public void handle(Socket client) throws IOException {
-	 		// implement me
-	 	}
+		private ThreadPool threadpool = null;
+
+		public TPCRegistrationHandler() {
+			// Call the other constructor
+			this(1);	
+		}
+
+		public TPCRegistrationHandler(int connections) {
+			threadpool = new ThreadPool(connections);	
+		}
+
+		@Override
+		public void handle(Socket client) throws IOException {
+			// implement me
+		}
 	}
 	
+	/**
+	 *  Data structure to maintain information about SlaveServers
+	 *
+	 */
 	private class SlaveInfo {
-		private UUID slaveID = null;
+		// 64-bit globally unique ID of the SlaveServer
+		private long slaveID = -1;
+		// Name of the host this SlaveServer is running on
 		private String hostName = null;
+		// Port which SlaveServer is listening to
 		private int port = -1;
+		
+		// Variables to be used to maintain connection with this SlaveServer
 		private KVClient<K, V> kvClient = null;
 		private Socket kvSocket = null;
 
@@ -97,7 +111,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			this.hostName = hostName;
 		}
 		
-		public UUID getSlaveID() {
+		public long getSlaveID() {
 			return slaveID;
 		}
 
@@ -114,13 +128,16 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 	}
 	
+	// Timeout value used during 2PC operations
 	private static final int TIMEOUT_MILLISECONDS = 5000;
 	
+	// Cache stored in the Master/Coordinator Server
 	private KVCache<K, V> masterCache = new KVCache<K, V>(1000);
-
+	
 	// Registration server that uses TPCRegistrationHandler
 	private SocketServer regServer = null;
 	
+	// ID of the next 2PC operation
 	private Long tpcOpId = 0L;
 	
 	private SortedMap<Integer, SlaveInfo> consistentHash = new TreeMap<Integer, SlaveInfo>();
@@ -142,18 +159,26 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	
 	/**
-	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers
+	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers 
 	 * actually register to let TPCMaster know their presence
 	 * 
 	 * @param listOfSlaves list of SlaveServers in "SlaveServerID@HostName:Port" format
 	 * @throws Exception
 	 */
 	public TPCMaster(String[] listOfSlaves) throws Exception {
+		// implement me
+
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
 	}
 	
+	/**
+	 * Calculates tpcOpId to be used for an operation. In this implementation
+	 * it is a long variable that increases by one for each 2PC operation. 
+	 * 
+	 * @return 
+	 */
 	private String getNextTpcOpId() {
 		tpcOpId++;
 		return tpcOpId.toString();		
@@ -173,11 +198,47 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 	
 	/**
-	 * Find first replica location
+	 * Converts Strings to 64-bit longs
+	 * Borrowed from http://stackoverflow.com/questions/1660501/what-is-a-good-64bit-hash-function-in-java-for-textual-strings
+	 * Adapted from String.hashCode()
+	 * @param string String to hash to 64-bit
+	 * @return
+	 */
+	private long hashTo64bit(String string) {
+		// Take a large prime
+		long h = 1125899906842597L; 
+		int len = string.length();
+
+		for (int i = 0; i < len; i++) {
+			h = 31*h + string.charAt(i);
+		}
+		return h;
+	}
+	
+	/**
+	 * Compares two longs as if they were unsigned (Java doesn't have unsigned data types except for char)
+	 * Borrowed from http://www.javamex.com/java_equivalents/unsigned_arithmetic.shtml
+	 * @param n1 First long
+	 * @param n2 Second long
+	 * @return is unsigned n1 less than unsigned n2
+	 */
+	private boolean isLessThanUnsigned(long n1, long n2) {
+		return (n1 < n2) ^ ((n1 < 0) != (n2 < 0));
+	}
+	
+	private boolean isLessThanEqualUnsigned(long n1, long n2) {
+		return isLessThanUnsigned(n1, n2) || n1 == n2;
+	}	
+
+	/**
+	 * Find first/primary replica location
 	 * @param key
 	 * @return
 	 */
-	private synchronized SlaveInfo findFirstReplica(K key) {
+	private SlaveInfo findFirstReplica(K key) {
+		// 64-bit hash of the key
+		long hashedKey = hashTo64bit(key.toString());
+
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
 		return consistentHash.get(
@@ -189,7 +250,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param firstReplica
 	 * @return
 	 */
-	private synchronized SlaveInfo findSuccessor(SlaveInfo firstReplica) {
+	private SlaveInfo findSuccessor(SlaveInfo firstReplica) {
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
 		return consistentHash.get(
@@ -233,8 +294,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 
 	/**
-	 * Synchronized method to perform TPC operations one after another. 
-	 *  
+	 * Synchronized method to perform 2PC operations one after another
+	 * 
 	 * @param msg
 	 * @param isPutReq
 	 * @return True if the TPC operation has succeeded
@@ -262,6 +323,18 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		return true;
 	}
 
+	/**
+	 * Perform GET operation in the following manner:
+	 * - Try to GET from first/primary replica
+	 * - If primary succeeded, return Value
+	 * - If primary failed, try to GET from the other replica
+	 * - If secondary succeeded, return Value
+	 * - If secondary failed, return KVExceptions from both replicas
+	 * 
+	 * @param msg Message containing Key to get
+	 * @return Value corresponding to the Key
+	 * @throws KVException
+	 */
 	public V handleGet(KVMessage msg) throws KVException {
 		// implement me
 		return null;
