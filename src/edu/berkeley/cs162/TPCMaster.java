@@ -323,15 +323,18 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						}
 						break;
 					case WAIT:
+						// Luke send right message
 						break;
 					case ABORT:
+						// Luke send message
 						break;
 					case COMMIT:
+						// Luke send message
 						break;
 					default: 
 						return;
 				}
-				// Listen for response from client
+				// TODO: Listen for response from client 
 				boolean nextStep = true; // LUKE SET THIS VALUE TO true if we receive the right message, false if not
 				boolean commit = true; // LUKE SET THIS VALUE based on message received
 				if (nextStep) {
