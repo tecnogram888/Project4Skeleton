@@ -140,7 +140,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	// ID of the next 2PC operation
 	private Long tpcOpId = 0L;
 	
-	private SortedMap<Integer, SlaveInfo> consistentHash = new TreeMap<Integer, SlaveInfo>();
+	private SortedMap<Long, SlaveInfo> consistentHash = new TreeMap<Long, SlaveInfo>();
 	
 	private SocketServer clientServer = null;
 	
@@ -189,13 +189,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	public void run() {
 		// implement me
-		
-		
-	}
-	
-	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
-		Long x = newSlave.getSlaveID();
-		consistentHash.put(x.hashCode(), newSlave);
+		try {
+		regServer.run();
+		clientServer.run(); 
+		} catch (IOException e) {
+			// TODO
+		}
 	}
 	
 	/**
@@ -231,6 +230,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		return isLessThanUnsigned(n1, n2) || n1 == n2;
 	}	
 
+	/** 
+	 * Add the SlaveInfo to the consistent hash table
+	 * @param newSlave
+	 */
+	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
+		Long x = newSlave.getSlaveID();
+		consistentHash.put(x, newSlave);
+	}
+	
 	/**
 	 * Find first/primary replica location
 	 * @param key
@@ -243,10 +251,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
 		SlaveInfo temp = consistentHash.get(
-				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(key.hashCode()) );
+				((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(hashedKey) );
 		if (temp == null) {
 			return consistentHash.get(
-					((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
+					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
 		}
 		return temp;
 	}
@@ -260,10 +268,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
 		SlaveInfo temp = consistentHash.get(
-				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(firstReplica.hashCode() + 1) );
+				((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(firstReplica.getSlaveID() + 1) );
 		if (temp == null) {
 			return consistentHash.get(
-					((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
+					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
 		}
 		return temp;
 	}
