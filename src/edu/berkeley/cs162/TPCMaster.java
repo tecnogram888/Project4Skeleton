@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.Hashtable;
 import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -146,16 +147,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	private ThreadPool threadpool = null;
 
-	private ReentrantReadWriteLock cacheLock = new ReentrantReadWriteLock();
+	private Hashtable<String, ReentrantReadWriteLock> accessLocks = 
+			new Hashtable<String, ReentrantReadWriteLock>();
 	
 	private Long currentTpcOpId = -1L;
 	private ReentrantLock transactionLock = new ReentrantLock();
-	private K transactionKey = null;
 	private boolean otherThreadDone = false;
 	private ReentrantLock otherThreadDoneLock = new ReentrantLock();
 	private boolean canCommit = false;
 	private ReentrantLock canCommitLock = new ReentrantLock();
-	private int TPCState = -1;
+	private enum EState {
+		NOSTATE, INIT, WAIT, ABORT, COMMIT
+	}
+	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	
 	/**
@@ -279,7 +283,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
 		K key;
 		V value;
-		KeyServer<K,V> keyserver;
 		Socket client;
 		KVMessage msg;
 		SlaveInfo slaveServerInfo;
@@ -292,6 +295,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 		@Override
 		public void run() {
+/*
 			boolean b = false;
 			try {
 				b = keyserver.put(key, value);
@@ -306,6 +310,40 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} catch (IOException e) {
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
+			}
+ */
+			while (true) {
+				switch (TPCState) {
+					// send the appropriate message to client
+					case INIT: 
+						if (isPutReq) {
+							// LUKE SEND 2PC Put Value Request
+						} else {
+							// LUKE SEND 2PC Del Value Request
+						}
+						break;
+					case WAIT:
+						break;
+					case ABORT:
+						break;
+					case COMMIT:
+						break;
+					default: 
+						return;
+				}
+				// Listen for response from client
+				boolean nextStep = true; // LUKE SET THIS VALUE TO true if we receive the right message, false if not
+				boolean commit = true; // LUKE SET THIS VALUE based on message received
+				if (nextStep) {
+					otherThreadDoneLock.lock();
+					if (otherThreadDone == false) {
+						otherThreadDone = true;
+					} else {
+						otherThreadDone = false;
+						// move on to appropriate state. 
+					}
+					otherThreadDoneLock.unlock();
+				}
 			}
 			
 		}
@@ -323,21 +361,31 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	public synchronized boolean performTPCOperation(KVMessage msg, boolean isPutReq) throws KVException {
 		// implement me
 		transactionLock.lock();
+		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
+		if (temp == null) {
+			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+		}
+		temp.writeLock().lock();
 		
 		try {
 			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
 			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, firstReplica, isPutReq));
 			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, successor, isPutReq));
+			// TODO sleeping on threads
 		} catch (InterruptedException e) {
 			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			temp.writeLock().unlock();
 			transactionLock.unlock();
 			return false;
 		} catch (KVException e){
 			//sendMessage(client, e.getMsg());
+			temp.writeLock().unlock();
 			transactionLock.unlock();
 			return false;
 		}
+
+		temp.writeLock().unlock();
 		transactionLock.unlock();
 		return true;
 	}
