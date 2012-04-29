@@ -242,8 +242,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
-		return consistentHash.get(
+		SlaveInfo temp = consistentHash.get(
 				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(key.hashCode()) );
+		if (temp == null) {
+			return consistentHash.get(
+					((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
+		}
+		return temp;
 	}
 	
 	/**
@@ -254,8 +259,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private SlaveInfo findSuccessor(SlaveInfo firstReplica) {
 		// implement me
 		if (consistentHash.isEmpty()) { return null; }
-		return consistentHash.get(
+		SlaveInfo temp = consistentHash.get(
 				((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(firstReplica.hashCode() + 1) );
+		if (temp == null) {
+			return consistentHash.get(
+					((TreeMap<Integer, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
+		}
+		return temp;
 	}
 	
 	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
