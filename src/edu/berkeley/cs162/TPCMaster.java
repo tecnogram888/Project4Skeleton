@@ -96,10 +96,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			String slaveIDString = slaveInfo.substring(0,indexAT);
 			String hostName = slaveInfo.substring(indexAT+1, indexCOLON);
 			String portString = slaveInfo.substring(indexCOLON + 1);
-			UUID slaveID;
+			long slaveID;
 			int port;
 			try{
-				slaveID = UUID.fromString(slaveIDString);
+				slaveID = Long.decode(slaveIDString);
 				port = Integer.parseInt(portString);
 			} catch (IllegalArgumentException e){
 				e.printStackTrace();
@@ -194,7 +194,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 	
 	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
-		consistentHash.put(newSlave.getSlaveID().hashCode(), newSlave);
+		Long x = newSlave.getSlaveID();
+		consistentHash.put(x.hashCode(), newSlave);
 	}
 	
 	/**
