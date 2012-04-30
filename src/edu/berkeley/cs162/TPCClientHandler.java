@@ -46,38 +46,24 @@ import java.net.Socket;
  * @param <V> Java Generic type for the Value
  */
 public class TPCClientHandler<K extends Serializable, V extends Serializable> implements NetworkHandler {
-	private KeyServer<K, V> keyserver = null;
-	private ThreadPool threadpool = null;
-	
+	// private KeyServer<K, V> keyserver = null;
+	private ThreadPool threadpool = null;	
 	private TPCMaster<K, V> tpcMaster = null;
-	
-	public TPCClientHandler(KeyServer<K, V> keyserver) {
-		initialize(keyserver, 1);
+
+	public TPCClientHandler(TPCMaster master) {
+		initialize(1, master);
 	}
 
-	public TPCClientHandler(KeyServer<K, V> keyserver, int connections) {
-		initialize(keyserver, connections);
+	public TPCClientHandler(int connections, TPCMaster master) {
+		initialize(connections, master);
 	}
 
-	private void initialize(KeyServer<K, V> keyserver, int connections) {
-		this.keyserver = keyserver;
-		threadpool = new ThreadPool(connections);	
-	}
-	
-	public TPCClientHandler(KeyServer<K, V> keyserver, TPCMaster<K, V> tpcMaster) {
-		initialize(keyserver, 1, tpcMaster);
+	private void initialize(int connections, TPCMaster master) {
+		//this.keyserver = keyserver;
+		this.threadpool = new ThreadPool(connections);	
+		this.tpcMaster = master;
 	}
 
-	public TPCClientHandler(KeyServer<K, V> keyserver, int connections, TPCMaster<K, V> tpcMaster) {
-		initialize(keyserver, connections, tpcMaster);
-	}
-
-	private void initialize(KeyServer<K, V> keyserver, int connections, TPCMaster<K, V> tpcMaster) {
-		this.keyserver = keyserver;
-		threadpool = new ThreadPool(connections);
-		this.tpcMaster = tpcMaster; 
-	}
-	
 	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
 	public static void sendMessage(Socket client, KVMessage message){
 		PrintWriter out = null;
@@ -107,20 +93,20 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 	@SuppressWarnings("unchecked")
 	@Override
 	public void handle(Socket client) throws IOException {
-		
+
 		InputStream in = client.getInputStream();
 		KVMessage mess = null;
-		
+
 		try {
 			mess = new KVMessage(in);
 		} catch (KVException e) {
-			
+
 			TPCClientHandler.sendMessage(client, e.getMsg());
 			return;
 		}
 
 		try {
-			threadpool.addToQueue(new processMessageRunnable<K,V>(mess, client));
+			threadpool.addToQueue(new processMessageRunnable<K,V>(mess, client, tpcMaster));
 		} catch (InterruptedException e) {
 			// TODO ERROR MESSAGE: sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
 			return;
@@ -132,24 +118,78 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 class processMessageRunnable<K extends Serializable, V extends Serializable> implements Runnable {
 	KVMessage mess;
 	Socket client;
+	TPCMaster tpcMaster;
 
-	public processMessageRunnable(KVMessage mess, Socket client){
+	public processMessageRunnable(KVMessage mess, Socket client, TPCMaster master){
 		this.mess = mess;
 		this.client = client;
+		this.tpcMaster = master;
 	}
 	@Override
 	public void run() {
-		if (message type is get) {
-			V = handleGet(whatever tpcMaster wants);
-			send response message to client
-		} else if (message type is put) {
-			boolean worked = performTPCOperation(mess, true);
-			send response message to client
-		} else if (message type is del) {
-			boolean worked = performTPCOperation(mess, false);
-			send response message to client
+		if ("getreq".equals(mess.getMsgType())) {	
+			V value = null;
+			try {
+				value = (V) tpcMaster.handleGet(mess);
+			} catch (KVException e) {
+				TPCClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			KVMessage message = null;
+			try {
+				message = new KVMessage("resp", mess.getKey(), KVMessage.encodeObject(value));
+			} catch (KVException e){
+				TPCClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			TPCClientHandler.sendMessage(client, message);
+			try {
+				client.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
+			}
+		} else if ("putreq".equals(mess.getMsgType())) {
+			
+			boolean status = false;
+			try {
+				//need seperate operations for put and delete
+				status = performPUTOperation(mess, true);
+			} catch (KVException e) {
+				KVClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			KVMessage message = new KVMessage(status, "Success");
+			KVClientHandler.sendMessage(client, message);
+			try {
+				client.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
+			}
+		} else if ("delreq".equals(mess.getMsgType())) {
+			
+			try {
+				performDelOperation(mess, false);
+			} catch (KVException e) {
+				KVClientHandler.sendMessage(client, e.getMsg());
+				try {
+					client.close();
+				} catch (IOException e2) {
+					e2.printStackTrace();
+				}
+				return;
+			}
+			KVMessage message = new KVMessage("Success");
+			KVClientHandler.sendMessage(client, message);
+			try {
+				client.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
+			}
 		} else {
-			fail case error??
+			//TODO throw Exception
 		}
 		/*
 		KVMessage message = null;

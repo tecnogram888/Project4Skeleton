@@ -211,7 +211,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
 		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
-		//TODO: clientServer needs a NetworkHandler
+		//TODO: clientServer needs a NetworkHandler --> new TPCClientHandler
 	}
 	
 	/**
@@ -452,6 +452,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		temp.readLock().lock();
 		// TODO: try cache
 		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		if (!"getreq".equals(msg.getMsgType()))
+			throw new KVException(new KVMessage("handleGet called without a getRequest"));
+		TPCMessage msgtpc = new TPCMessage(msg.getMsgType(),msg.getKey());
 		
 		temp.readLock().unlock();
 		return null;
