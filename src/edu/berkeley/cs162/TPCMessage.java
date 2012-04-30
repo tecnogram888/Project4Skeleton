@@ -37,8 +37,10 @@ import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
+import java.net.Socket;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
@@ -63,7 +65,7 @@ import org.xml.sax.SAXException;
 /**
  * This is the object that is used to generate messages the XML based messages 
  * for communication between clients and servers. Data is stored in a 
- * marshalled String format in this object.
+ * marshalled String format in this object...
  */
 public class TPCMessage implements Serializable {
 	private static final long serialVersionUID = 6473128480951955693L;
@@ -82,6 +84,15 @@ public class TPCMessage implements Serializable {
 	
 	// added by luke
 	Text text;
+	
+	// for 2PC log ready's
+	public TPCMessage(String msgType, String key, String value, String message, String tpcOpId) {
+		this.msgType = msgType;
+		this.key = key;
+		this.value = value;
+		this.message = message;
+		this.tpcOpId = tpcOpId;
+	}
 	
 	// for 2PC Put Requests
 	public TPCMessage(String msgType, String key, String value, String tpcOpId) {
@@ -106,13 +117,15 @@ public class TPCMessage implements Serializable {
 		}
 	}
 	
-	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, and Server response
-	public TPCMessage(String msgType, String tpcOpIdORmessage) {
+	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, 2PCLog commit, and KeyRequest
+	public TPCMessage(String msgType, String tpcOpIdORmessageORkey) {
 		this.msgType = msgType;
-		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType)){
-			this.tpcOpId = tpcOpIdORmessage;
+		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType) || "commit".equals(msgType) || "abort".equals(msgType)){
+			this.tpcOpId = tpcOpIdORmessageORkey;
 		} else if ("register".equals(msgType) || "resp".equals(msgType)){	
-			this.message = tpcOpIdORmessage;
+			this.message = tpcOpIdORmessageORkey;
+		} else if ("getreq".equals(msgType)){
+			this.key = tpcOpIdORmessageORkey;
 		}
 	}
 	
@@ -224,6 +237,8 @@ public class TPCMessage implements Serializable {
 			value = getElementsTag("Value", typeElement);
 			
 			message = getElementsTag("Message", typeElement);
+			
+			tpcOpId = getElementsTag("TPCOpId", typeElement);
 		
 			// TODO Do error checking?
 			if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
@@ -322,7 +337,7 @@ public class TPCMessage implements Serializable {
             rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
             //print xml
-            //System.out.println("Here's the xml:\n\n" + rtn);
+            System.out.println("Here's the xml:\n\n" + rtn);
 		return rtn;
 	}
 	
@@ -367,4 +382,38 @@ public class TPCMessage implements Serializable {
 		}
 		return obj;
 	}
+
+	/** utility function that sends a TPC message
+	 * @param socket
+	 * @param message
+	 */
+	//TODO: sendmessage
+	public static TPCMessage sendTPCMessage(Socket socket, TPCMessage message) throws KVException {
+		TPCMessage ACK = null;
+		String xmlFile = message.toXML();
+		PrintWriter out = null;
+		InputStream in = null;
+		try {
+			out = new PrintWriter(socket.getOutputStream(),true);
+			out.println(xmlFile);
+			socket.shutdownOutput();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not send data"));
+		}
+		try {
+			in = socket.getInputStream();
+			ACK = new TPCMessage(in);
+			in.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+		}
+		out.close();
+		try {
+			socket.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+		}
+		return ACK;
+	}
 }
+

@@ -425,6 +425,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return false;
 		}
 
+		// TODO Update cache
 		temp.writeLock().unlock();
 		transactionLock.unlock();
 		return true;
@@ -444,6 +445,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	public V handleGet(KVMessage msg) throws KVException {
 		// implement me
+		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
+		if (temp == null) {
+			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+		}
+		temp.readLock().lock();
+		// TODO: try cache
+		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		
+		temp.readLock().unlock();
 		return null;
 	}
 	
