@@ -30,6 +30,7 @@
 package edu.berkeley.cs162;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
 import java.net.Socket;
 
@@ -55,6 +56,23 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	@Override
 	public void handle(Socket client) throws IOException {
 		// implement me
+
+		InputStream in = client.getInputStream();
+		TPCMessage mess = null;
+		
+		try {
+			mess = new TPCMessage(in);
+		} catch (KVException e) {
+			
+			TPCClientHandler.sendMessage(client, e.getMsg());
+			return;
+		}
+
+		if (mess.getMsgType().equals("getreq")) {
+			
+		}
+		
+		
 	}
 
 	/**
