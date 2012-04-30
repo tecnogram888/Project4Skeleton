@@ -117,13 +117,15 @@ public class TPCMessage implements Serializable {
 		}
 	}
 	
-	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, and 2PCLog commit
-	public TPCMessage(String msgType, String tpcOpIdORmessage) {
+	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, 2PCLog commit, and KeyRequest
+	public TPCMessage(String msgType, String tpcOpIdORmessageORkey) {
 		this.msgType = msgType;
 		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType) || "commit".equals(msgType) || "abort".equals(msgType)){
-			this.tpcOpId = tpcOpIdORmessage;
+			this.tpcOpId = tpcOpIdORmessageORkey;
 		} else if ("register".equals(msgType) || "resp".equals(msgType)){	
-			this.message = tpcOpIdORmessage;
+			this.message = tpcOpIdORmessageORkey;
+		} else if ("getreq".equals(msgType)){
+			this.key = tpcOpIdORmessageORkey;
 		}
 	}
 	
@@ -235,6 +237,8 @@ public class TPCMessage implements Serializable {
 			value = getElementsTag("Value", typeElement);
 			
 			message = getElementsTag("Message", typeElement);
+			
+			tpcOpId = getElementsTag("TPCOpId", typeElement);
 		
 			// TODO Do error checking?
 			if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
@@ -333,7 +337,7 @@ public class TPCMessage implements Serializable {
             rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
             //print xml
-            //System.out.println("Here's the xml:\n\n" + rtn);
+            System.out.println("Here's the xml:\n\n" + rtn);
 		return rtn;
 	}
 	
