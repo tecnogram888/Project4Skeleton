@@ -83,6 +83,15 @@ public class TPCMessage implements Serializable {
 	// added by luke
 	Text text;
 	
+	// for 2PC log ready's
+	public TPCMessage(String msgType, String key, String value, String message, String tpcOpId) {
+		this.msgType = msgType;
+		this.key = key;
+		this.value = value;
+		this.message = message;
+		this.tpcOpId = tpcOpId;
+	}
+	
 	// for 2PC Put Requests
 	public TPCMessage(String msgType, String key, String value, String tpcOpId) {
 		this.msgType = msgType;
@@ -106,10 +115,10 @@ public class TPCMessage implements Serializable {
 		}
 	}
 	
-	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, and Server response
+	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, and 2PCLog commit
 	public TPCMessage(String msgType, String tpcOpIdORmessage) {
 		this.msgType = msgType;
-		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType)){
+		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType) || "commit".equals(msgType) || "abort".equals(msgType)){
 			this.tpcOpId = tpcOpIdORmessage;
 		} else if ("register".equals(msgType) || "resp".equals(msgType)){	
 			this.message = tpcOpIdORmessage;
