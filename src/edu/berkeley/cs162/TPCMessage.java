@@ -37,8 +37,10 @@ import java.io.InputStream;
 import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
+import java.net.Socket;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
@@ -376,4 +378,38 @@ public class TPCMessage implements Serializable {
 		}
 		return obj;
 	}
+
+	/** utility function that sends a TPC message
+	 * @param socket
+	 * @param message
+	 */
+	//TODO: sendmessage
+	public static TPCMessage sendTPCMessage(Socket socket, TPCMessage message) throws KVException {
+		TPCMessage ACK = null;
+		String xmlFile = message.toXML();
+		PrintWriter out = null;
+		InputStream in = null;
+		try {
+			out = new PrintWriter(socket.getOutputStream(),true);
+			out.println(xmlFile);
+			socket.shutdownOutput();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not send data"));
+		}
+		try {
+			in = socket.getInputStream();
+			ACK = new TPCMessage(in);
+			in.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+		}
+		out.close();
+		try {
+			socket.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+		}
+		return ACK;
+	}
 }
+
