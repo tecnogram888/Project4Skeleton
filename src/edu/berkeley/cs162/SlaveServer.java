@@ -103,51 +103,18 @@ public class SlaveServer {
 		}
 		
 		try {
-			register.setSoTimeout(99); //TODO: what should the timeout value be?
+			register.setSoTimeout(30);
 		} catch (SocketException e) {
 			System.err.println("could not set socket timeout");
 		}
 		
 		
-		ACK = sendTPCMessage(register, new TPCMessage(slaveID+"@"+masterHostName+":"+masterPort));
+		ACK = TPCMessage.sendTPCMessage(register, new TPCMessage(slaveID+"@"+masterHostName+":"+masterPort));
 		if (ACK.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort) {
 			System.err.println("could not successfully register");
 		} else {
 			// sys.log -> successfully registered?
 		}
-	}
-	
-	/** utility function that sends a TPC message
-	 * @param socket
-	 * @param message
-	 */
-	//TODO: sendmessage
-	public static TPCMessage sendTPCMessage(Socket socket, TPCMessage message) throws KVException {
-		TPCMessage ACK = null;
-		String xmlFile = message.toXML(); //TODO: toXML needs to conform to ReigsterMessage spec
-		PrintWriter out = null;
-		InputStream in = null;
-		try {
-			out = new PrintWriter(socket.getOutputStream(),true);
-			out.println(xmlFile);
-			socket.shutdownOutput();
-		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not send data"));
-		}
-		try {
-			in = socket.getInputStream();
-			ACK = new TPCMessage(in);
-			in.close();
-		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not receive data"));
-		}
-		out.close();
-		try {
-			socket.close();
-		} catch (IOException e) {
-			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
-		}
-		return ACK;
 	}
 
 }
