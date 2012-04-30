@@ -100,7 +100,6 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 		try {
 			mess = new KVMessage(in);
 		} catch (KVException e) {
-
 			TPCClientHandler.sendMessage(client, e.getMsg());
 			return;
 		}
@@ -185,7 +184,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			try {
 				client.close();
 			} catch (IOException e) {
-				// These ones don't send errors, this is a server error
+				// These ones don't  errors, this is a server error
 				e.printStackTrace();
 			}
 		} else {

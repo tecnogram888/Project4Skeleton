@@ -35,6 +35,8 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.Hashtable;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -452,12 +454,89 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		temp.readLock().lock();
 		// TODO: try cache
 		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
-		if (!"getreq".equals(msg.getMsgType()))
-			throw new KVException(new KVMessage("handleGet called without a getRequest"));
-		TPCMessage msgtpc = new TPCMessage(msg.getMsgType(),msg.getKey());
+		if (!"getreq".equals(msg.getMsgType())){
+			// TODO this should not happen, so crash the server if it does
+			System.exit(1);
+			// temp.readLock().unlock();
+			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+		}
+		TPCMessage TPCmsg = new TPCMessage(msg.getMsgType(),msg.getKey());
 		
-		temp.readLock().unlock();
-		return null;
+		// find first replica
+		SlaveInfo firstReplica = findFirstReplica((K)TPCMessage.decodeObject(TPCmsg.getKey()));
+		// send/receive request to first slave
+		// TODO make sure firstReplica.hostName, firstReplica.port are for the SLAVE, not CLIENT
+		KVMessage resp1 = sendRecieve(TPCmsg, firstReplica.hostName, firstReplica.port);
+		if (!"resp".equals(resp1.getMessage())){
+			// TODO this should not happen, so crash the server if it does
+			System.exit(1);
+			// temp.readLock().unlock();
+			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+		}
+		
+		//TODO check if this is correct
+		if (resp1.getValue() == null){ // First replica failed
+			// try second replica
+			SlaveInfo secondReplica = findSuccessor(firstReplica);
+			// send/receive request to first slave
+			// TODO make sure firstReplica.hostName, firstReplica.port are for the SLAVE, not CLIENT
+			KVMessage resp2 = sendRecieve(TPCmsg, secondReplica.hostName, secondReplica.port);
+			if (!"resp".equals(resp2.getMessage())) throw new KVException(new KVMessage("handleGet received a crappy response message"));
+			
+			if (resp2.getValue() == null){ // Second replica also failed
+				temp.readLock().unlock();
+				throw new KVException(new KVMessage("@"+firstReplica.slaveID+"=>"+resp1.getMessage()+"\n"+"@"+secondReplica.slaveID+"=>"+resp2.getMessage()));
+			} else{
+				// First replica failed, second replica succeeded
+				temp.readLock().unlock();
+				return (V) KVMessage.decodeObject(resp2.getValue());
+			}
+		} else{
+			// first replica succeeded
+			temp.readLock().unlock();
+			return (V) KVMessage.decodeObject(resp1.getValue());
+		}
+	}
+	
+	private KVMessage sendRecieve(TPCMessage InputMessage, String server, int port) throws KVException {
+		String xmlFile = InputMessage.toXML();
+		KVMessage returnMessage;
+		Socket connection;
+		PrintWriter out = null;
+		InputStream in = null;
+		try {
+			connection = new Socket(server, port);
+		} catch (UnknownHostException e) {
+			throw new KVException(new KVMessage("Network Error: Could not connect"));
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not create socket"));
+		}
+		try {
+			connection.setSoTimeout(15000);
+		} catch (SocketException e1) {
+			throw new KVException(new KVMessage("Unknown Error: Could net set Socket timeout"));
+		}
+		try {
+			out = new PrintWriter(connection.getOutputStream(),true);
+			out.println(xmlFile);
+			connection.shutdownOutput();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not send data"));
+		}
+		try {
+			in = connection.getInputStream();
+			returnMessage = new KVMessage(in);
+			in.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+		}
+		out.close();
+		try {
+			connection.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+		}
+		return returnMessage;
 	}
 	
 	
