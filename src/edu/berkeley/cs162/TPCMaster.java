@@ -30,6 +30,8 @@
 package edu.berkeley.cs162;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.InetAddress;
 import java.net.Socket;
@@ -64,6 +66,39 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		@Override
 		public void handle(Socket client) throws IOException {
 			// implement me
+			PrintWriter out = null;
+			InputStream in = null;
+			SlaveInfo newSlave = null;
+			TPCMessage registration = null;
+			
+			// read registration message from SlaveServer
+			try {
+				registration = new TPCMessage(client.getInputStream());
+				newSlave = new SlaveInfo(registration.getMessage());
+			} catch (KVException e) {
+				System.err.println("error reading registration message");
+			}
+			
+			addToConsistentHash(newSlave);
+			
+			try {
+				out = new PrintWriter(client.getOutputStream(), true);
+			} catch (IOException e) {
+				System.err.println("could not get slave's outputstream");
+			}
+			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
+			String xmlFile = null;
+			try {
+				xmlFile = msg.toXML();
+			} catch (KVException e) {
+				System.err.println("could not convert TPCMessage to XML");
+			}
+			out.println(xmlFile);
+			try {
+				client.shutdownOutput();
+			} catch (IOException e) {
+				System.err.println("could not shutdown client ouptut");
+			}
 		}
 	}
 	
@@ -174,7 +209,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
+		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
 		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
+		//TODO: clientServer needs a NetworkHandler
 	}
 	
 	/**
@@ -238,7 +275,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Add the SlaveInfo to the consistent hash table
 	 * @param newSlave
 	 */
-	private synchronized void addToConsistentHash(SlaveInfo newSlave) {
+	public synchronized void addToConsistentHash(SlaveInfo newSlave) {
 		Long x = newSlave.getSlaveID();
 		consistentHash.put(x, newSlave);
 	}
