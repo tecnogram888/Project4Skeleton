@@ -65,7 +65,7 @@ import org.xml.sax.SAXException;
 /**
  * This is the object that is used to generate messages the XML based messages 
  * for communication between clients and servers. Data is stored in a 
- * marshalled String format in this object.
+ * marshalled String format in this object...
  */
 public class TPCMessage implements Serializable {
 	private static final long serialVersionUID = 6473128480951955693L;
