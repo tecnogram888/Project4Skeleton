@@ -95,6 +95,7 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 	public void handle(Socket client) throws IOException {
 
 		InputStream in = client.getInputStream();
+		//TODO where do we close in?
 		KVMessage mess = null;
 
 		try {
@@ -149,27 +150,34 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				e.printStackTrace();
 			}
 		} else if ("putreq".equals(mess.getMsgType())) {
+			// get the TPC Op ID
+			String TPCOpId = "TODO";
+			TPCMessage TPCmess = new TPCMessage(mess, TPCOpId);		
 			
 			boolean status = false;
 			try {
-				//need seperate operations for put and delete
-				status = performPUTOperation(mess, true);
+				//need separate operations for put and delete
+				status = tpcMaster.performTPCOperation(TPCmess);
 			} catch (KVException e) {
 				KVClientHandler.sendMessage(client, e.getMsg());
 				return;
 			}
 			KVMessage message = new KVMessage(status, "Success");
-			KVClientHandler.sendMessage(client, message);
+			TPCClientHandler.sendMessage(client, message);
 			try {
 				client.close();
 			} catch (IOException e) {
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
 			}
-		} else if ("delreq".equals(mess.getMsgType())) {
 			
+			//TODO haven't done delreq yet
+		} else if ("delreq".equals(mess.getMsgType())) {
+			// get the TPC Op ID
+			String TPCOpId = "TODO";
+			TPCMessage TPCmess = new TPCMessage(mess, TPCOpId);	
 			try {
-				performDelOperation(mess, false);
+				tpcMaster.performTPCOperation(TPCmess);
 			} catch (KVException e) {
 				KVClientHandler.sendMessage(client, e.getMsg());
 				try {

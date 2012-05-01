@@ -161,8 +161,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return kvSocket;
 		}
 
-		public void setKvSocket(Socket kvSocket) {
-			this.kvSocket = kvSocket;
+		public String getHostName() {
+			return hostName;
+		}
+		
+		public int getPort() {
+			return port;
 		}
 	}
 	
@@ -201,7 +205,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	/**
 	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers 
-	 * actually register to let TPCMaster know their presence
+	 * actually register to let TPCMaster know their spresence
 	 * 
 	 * @param listOfSlaves list of SlaveServers in "SlaveServerID@HostName:Port" format
 	 * @throws Exception
@@ -231,7 +235,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-		// implement me
+		// TODO implement me
 		try {
 		regServer.run();
 		clientServer.run(); 
@@ -320,17 +324,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 	
 	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
-		K key;
-		V value;
+		TPCMessage message;
 		Socket client;
-		KVMessage msg;
 		SlaveInfo slaveServerInfo;
-		boolean isPutReq;
 		
-		public processTPCOpRunnable(KVMessage msg, SlaveInfo slaveServerInfo, boolean isPutReq){
-			this.msg = msg;
-			this.slaveServerInfo = slaveServerInfo;
-			this.isPutReq = isPutReq;
+		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo){
+			this.message = msg;
+			this.slaveServerInfo = slaveServerInfo;			
 		}
 		@Override
 		public void run() {
@@ -355,8 +355,14 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				switch (TPCState) {
 					// send the appropriate message to client
 					case INIT: 
-						if (isPutReq) {
-							// LUKE SEND 2PC Put Value Request
+						if ("putreq".equals(message.getMsgType())) {
+							try {
+								TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+								//TODO if (//check if its ready or abort)
+							} catch (KVException e) {
+								// TODO handle exception here
+								e.printStackTrace();
+							}
 						} else {
 							// LUKE SEND 2PC Del Value Request
 						}
@@ -400,7 +406,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @return True if the TPC operation has succeeded
 	 * @throws KVException
 	 */
-	public synchronized boolean performTPCOperation(KVMessage msg, boolean isPutReq) throws KVException {
+	public synchronized boolean performTPCOperation(TPCMessage msg) throws KVException {
 		// implement me
 		transactionLock.lock();
 		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
@@ -412,8 +418,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		try {
 			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
-			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, firstReplica, isPutReq));
-			threadpool.addToQueue(new processTPCOpRunnable<K,V>(msg, successor, isPutReq));
+			threadpool.addToQueue(
+					new processTPCOpRunnable<K,V>(msg, firstReplica));
+			threadpool.addToQueue(
+					new processTPCOpRunnable<K,V>(msg, successor));
 			// TODO sleeping on threads
 		} catch (InterruptedException e) {
 			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
@@ -427,7 +435,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return false;
 		}
 
-		// TODO Update cache
+		// TODO SOLOMON Update cache
 		temp.writeLock().unlock();
 		transactionLock.unlock();
 		return true;
@@ -452,7 +460,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
 		}
 		temp.readLock().lock();
-		// TODO: try cache
+		
+		// TODO: SOLOMON try cache
+		
 		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
 		if (!"getreq".equals(msg.getMsgType())){
 			// TODO this should not happen, so crash the server if it does
@@ -460,13 +470,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			// temp.readLock().unlock();
 			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 		}
-		TPCMessage TPCmsg = new TPCMessage(msg.getMsgType(),msg.getKey());
 		
 		// find first replica
-		SlaveInfo firstReplica = findFirstReplica((K)TPCMessage.decodeObject(TPCmsg.getKey()));
+		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+		
 		// send/receive request to first slave
-		// TODO make sure firstReplica.hostName, firstReplica.port are for the SLAVE, not CLIENT
-		KVMessage resp1 = sendRecieve(TPCmsg, firstReplica.hostName, firstReplica.port);
+		KVMessage resp1 = sendRecieveKV(msg, firstReplica.hostName, firstReplica.port);
 		if (!"resp".equals(resp1.getMessage())){
 			// TODO this should not happen, so crash the server if it does
 			System.exit(1);
@@ -478,9 +487,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		if (resp1.getValue() == null){ // First replica failed
 			// try second replica
 			SlaveInfo secondReplica = findSuccessor(firstReplica);
+			
 			// send/receive request to first slave
-			// TODO make sure firstReplica.hostName, firstReplica.port are for the SLAVE, not CLIENT
-			KVMessage resp2 = sendRecieve(TPCmsg, secondReplica.hostName, secondReplica.port);
+			KVMessage resp2 = sendRecieveKV(msg, secondReplica.hostName, secondReplica.port);
 			if (!"resp".equals(resp2.getMessage())) throw new KVException(new KVMessage("handleGet received a crappy response message"));
 			
 			if (resp2.getValue() == null){ // Second replica also failed
@@ -497,8 +506,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return (V) KVMessage.decodeObject(resp1.getValue());
 		}
 	}
-	
-	private KVMessage sendRecieve(TPCMessage InputMessage, String server, int port) throws KVException {
+	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {
 		String xmlFile = InputMessage.toXML();
 		KVMessage returnMessage;
 		Socket connection;
@@ -537,7 +545,46 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
 		}
 		return returnMessage;
-	}
-	
-	
+	}	
+
+	public TPCMessage sendRecieveTPC(TPCMessage InputMessage, String server, int port) throws KVException {
+		String xmlFile = InputMessage.toXML();
+		TPCMessage returnMessage;
+		Socket connection;
+		PrintWriter out = null;
+		InputStream in = null;
+		try {
+			connection = new Socket(server, port);
+		} catch (UnknownHostException e) {
+			throw new KVException(new KVMessage("Network Error: Could not connect"));
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not create socket"));
+		}
+		try {
+			connection.setSoTimeout(15000);
+		} catch (SocketException e1) {
+			throw new KVException(new KVMessage("Unknown Error: Could net set Socket timeout"));
+		}
+		try {
+			out = new PrintWriter(connection.getOutputStream(),true);
+			out.println(xmlFile);
+			connection.shutdownOutput();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not send data"));
+		}
+		try {
+			in = connection.getInputStream();
+			returnMessage = new TPCMessage(in);
+			in.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+		}
+		out.close();
+		try {
+			connection.close();
+		} catch (IOException e) {
+			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+		}
+		return returnMessage;
+	}	
 }

@@ -88,13 +88,14 @@ public class TPCMessage implements Serializable {
 	Text text;
 	
 	// converts a KVMessage to a TPCMessage
-	public TPCMessage(KVMessage inputMessage){
+	public TPCMessage(KVMessage inputMessage, String tpcOpID){
 		this.msgType = inputMessage.getMsgType();
 		this.key = inputMessage.getKey();
 		this.value = inputMessage.getValue();
 		this.status = inputMessage.getStatus();
 		this.message = inputMessage.getMessage();
 		this.isPutResp = inputMessage.getIsPutResp();
+		this.tpcOpId = tpcOpID;
 	}
 	
 	// for 2PC log ready's
