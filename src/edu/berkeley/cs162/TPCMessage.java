@@ -73,6 +73,8 @@ public class TPCMessage implements Serializable {
 	private String msgType = null;
 	private String key = null;
 	private String value = null;
+	private boolean status = false;
+	private boolean isPutResp = false;
 	// Skeleton: private String status = null;
 	private String message = null;
 	private String tpcOpId = null;
@@ -84,6 +86,16 @@ public class TPCMessage implements Serializable {
 	
 	// added by luke
 	Text text;
+	
+	// converts a KVMessage to a TPCMessage
+	public TPCMessage(KVMessage inputMessage){
+		this.msgType = inputMessage.getMsgType();
+		this.key = inputMessage.getKey();
+		this.value = inputMessage.getValue();
+		this.status = inputMessage.getStatus();
+		this.message = inputMessage.getMessage();
+		this.isPutResp = inputMessage.getIsPutResp();
+	}
 	
 	// for 2PC log ready's
 	public TPCMessage(String msgType, String key, String value, String message, String tpcOpId) {
