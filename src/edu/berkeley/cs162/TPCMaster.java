@@ -197,7 +197,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private boolean canCommit = false;
 	private ReentrantLock canCommitLock = new ReentrantLock();
 	private enum EState {
-		NOSTATE, INIT, WAIT, ABORT, COMMIT
+		NOSTATE, INIT, ABORT, COMMIT
 	}
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
@@ -365,18 +365,39 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						if ("ready".equals(response.getMsgType())){
 							TPCStateLock.lock();
 							if (TPCState == EState.COMMIT){
-								TPCState = EState.WAIT;
-								// wake up other guy
+								otherThreadDone.notifyAll();
 							} else if (TPCState == EState.ABORT){
-								// wake up other guy
+								otherThreadDone.notifyAll();
 							} else {
 								TPCState = EState.COMMIT;
-								// go to sleep
+								try {
+									TPCStateLock.unlock();
+									otherThreadDone.wait();
+								} catch (InterruptedException e) {
+									System.err.println("INIT messed up when trying to wait");
+									e.printStackTrace();
+									System.exit(1);
+								}
 							}
 							TPCStateLock.unlock();
 						} else if ("abort".equals(response.getMsgType())){
 							TPCStateLock.lock();
-							TPCState = EState.ABORT;
+							if (TPCState == EState.INIT){
+								// other thread is has not finished yet
+								TPCState = EState.ABORT;
+								TPCStateLock.unlock();
+								// TODO DOUG what do do if context switch
+								try {
+									otherThreadDone.wait();
+								} catch (InterruptedException e) {
+									System.err.println("INIT messed up when trying to wait");
+									e.printStackTrace();
+									System.exit(1);
+								}
+							} else{
+								// if the other thread already finished and is waiting
+								otherThreadDone.notifyAll();
+							}		
 							// check if other guy is sleeping, if so wake him up, if not go to sleep
 							TPCStateLock.unlock();
 						} else{
@@ -395,19 +416,47 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						}
 					}
 					break;
-				case WAIT:
-					// Luke send right message
-					break;
 				case ABORT:
-					// Luke send message
-					break;
+					try {
+						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						// check to see if response is ready or abort
+						if (!"ack".equals(response.getMsgType())){
+							System.err.println("ABORT did not get a correct ack");
+							System.exit(1);
+						}
+					} catch (KVException e) {
+						if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+							// Connection timed out
+							// resend
+							continue;
+						} else {
+							e.printStackTrace();
+						}
+					}
+					return;
+					//TODO DOUG wake up booleans here and set TPCState to NOSTATE
 				case COMMIT:
-					// Luke send message
-					break;
+					try {
+						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						// check to see if response is ready or abort
+						if (!"ack".equals(response.getMsgType())){
+							System.err.println("COMMIT did not get a correct ack");
+							System.exit(1);
+						}
+					} catch (KVException e) {
+						if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+							// Connection timed out
+							// resend
+							continue;
+						} else {
+							e.printStackTrace();
+						}
+					}
+					return;
+					//TODO DOUG wake up booleans here and set TPCState to NOSTATE
 				default: 
 					return;
 				}
-				// TODO: Listen for response from client 
 			}
 
 		}
