@@ -139,10 +139,10 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			try {
 				message = new KVMessage("resp", mess.getKey(), KVMessage.encodeObject(value));
 			} catch (KVException e){
-				TPCClientHandler.sendMessage(client, e.getMsg());
+				KVClientHandler.sendMessage(client, e.getMsg());
 				return;
 			}
-			TPCClientHandler.sendMessage(client, message);
+			KVClientHandler.sendMessage(client, message);
 			try {
 				client.close();
 			} catch (IOException e) {
@@ -150,14 +150,10 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				e.printStackTrace();
 			}
 		} else if ("putreq".equals(mess.getMsgType())) {
-			// get the TPC Op ID
-			String TPCOpId = "TODO";
-			TPCMessage TPCmess = new TPCMessage(mess, TPCOpId);		
-			
 			boolean status = false;
 			try {
 				//need separate operations for put and delete
-				status = tpcMaster.performTPCOperation(TPCmess);
+				status = tpcMaster.performTPCOperation(mess);
 			} catch (KVException e) {
 				KVClientHandler.sendMessage(client, e.getMsg());
 				return;
@@ -177,7 +173,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			String TPCOpId = "TODO";
 			TPCMessage TPCmess = new TPCMessage(mess, TPCOpId);	
 			try {
-				tpcMaster.performTPCOperation(TPCmess);
+				tpcMaster.performTPCOperation(mess);
 			} catch (KVException e) {
 				KVClientHandler.sendMessage(client, e.getMsg());
 				try {
