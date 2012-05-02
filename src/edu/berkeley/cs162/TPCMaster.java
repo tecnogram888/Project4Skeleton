@@ -68,7 +68,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		@Override
 		public void handle(Socket client) throws IOException {
-			// implement me
 			PrintWriter out = null;
 			InputStream in = null;
 			SlaveInfo newSlave = null;
@@ -83,8 +82,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			addToConsistentHash(newSlave);
-			if (consistentHash.size() == listOfSlaves.length)
+			synchronized(consistentHash){
+			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
 				consistentHash.notify();
+			}
 
 			try {
 				out = new PrintWriter(client.getOutputStream(), true);
@@ -242,20 +243,21 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-		// TODO run regServer and clientServer on different threads
+	
 		try {
 			// create a runnable and thread for regServer
 			class regServerRunnable implements Runnable {@Override public void run() {try {regServer.run();} catch (IOException e) {e.printStackTrace();}}}
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
-			// TODO clientServer needs to wait until all the slaves are registered
 			while (consistentHash.size() != listOfSlaves.length) {
 				// sleep clientServer
+				synchronized(consistentHash){
 				try {
 					consistentHash.wait();
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
+					// TODO Doug how to handle this issue? In this, just die I think
 					e.printStackTrace();
+				}
 				}
 			}
 			clientServer.run();
