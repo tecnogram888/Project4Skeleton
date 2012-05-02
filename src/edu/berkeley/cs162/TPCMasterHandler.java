@@ -72,8 +72,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		}
 		@Override
 		public void run() {
-			// try cache
-			// try KVStore
+			keyserver.get()
 			// send response to master
 		}
 	}
@@ -94,14 +93,19 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			while (true) {
 				switch (TPCState) {
 				case WAIT: 
-					
 					// listen for abort or commit
 					// write message to TPC Log
 					// go into proper state
 				case ABORT:
 					// abort and send ack and 
 				case COMMIT:
+					if () {
+						keyserver.put()
+					} else if () {
+						keyserver.del(key)
+					}
 					// commit and send ack and 
+					// commit by updating cache and KVStore according to original message
 				default:
 					// fail/error
 				}
