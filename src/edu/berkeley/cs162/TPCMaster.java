@@ -524,23 +524,74 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @return Value corresponding to the Key
 	 * @throws KVException
 	 */
-	public V handleGet(KVMessage msg) throws KVException {
-		// implement me
-		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
-		if (temp == null) {
-			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+	class getRunnable<K extends Serializable, V extends Serializable> implements Runnable {
+		KVMessage message;
+		SlaveInfo slaveServer;
+		
+		public getRunnable (KVMessage msg, SlaveInfo replica){
+			this.message = msg;
+			this.slaveServer = replica;
 		}
-		temp.readLock().lock();
-
-		// TODO: SOLOMON try cache
-
-		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		
+		@Override
+		public void run(){
+			// send/receive request to first slave
+			KVMessage resp1;
+			try {
+				resp1 = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
+			} catch (KVException e) {
+				KVClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			if (!"resp".equals(resp1.getMessage())){
+				// TODO this should not happen, so crash the server if it does
+				System.exit(1);
+				// temp.readLock().unlock();
+				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+			}
+		}
+	}
+	
+	public V handleGet(KVMessage msg) throws KVException {
 		if (!"getreq".equals(msg.getMsgType())){
 			// TODO this should not happen, so crash the server if it does
 			System.exit(1);
 			// temp.readLock().unlock();
 			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 		}
+		
+		// implement me
+				ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
+				if (accessLock == null) {
+					accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+				}
+				accessLock.readLock().lock();
+				try {
+					SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+					SlaveInfo successor = findSuccessor(firstReplica);
+					threadpool.addToQueue(
+							new getRunnable<K,V>(msg, firstReplica));
+					threadpool.addToQueue(
+							new processTPCOpRunnable<K,V>(TPCmess, successor));
+					// TODO DOUG sleeping on threads
+				} catch (InterruptedException e) {
+					//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+					accessLock.writeLock().unlock();
+					return false;
+				} catch (KVException e){
+					//sendMessage(client, e.getMsg());
+					accessLock.writeLock().unlock();
+					return false;
+				}
+
+				// TODO SOLOMON Update cache
+				accessLock.writeLock().unlock();
+				return true;
+
+		// TODO: SOLOMON try cache
+
+		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		
 
 		// find first replica
 		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
@@ -577,6 +628,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return (V) KVMessage.decodeObject(resp1.getValue());
 		}
 	}
+	public static void sendMessage(Socket client, KVMessage message){
+		sendRecieveKV(KVMessage InputMessage, String server, int port);
+	}
+	
 	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {
 		String xmlFile = InputMessage.toXML();
 		KVMessage returnMessage;
