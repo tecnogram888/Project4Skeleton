@@ -42,26 +42,16 @@ public class KVCrypt {
     public static String keyStr = null;
     private static Cipher cipher = null;
     private static Cipher decipher = null;
+    private static PKCS5Padding padder = null;
 
     public void setUp() throws Exception {
     	// implement me
     	cipher.init(Cipher.ENCRYPT_MODE, key);
     	cipher.init(Cipher.DECRYPT_MODE, key);
+    	padder = new PKCS5Padding(8);//Block byte length = 8
     }
     
-    public static byte[] padByteArray(byte[] input){
-    	if (input.length % 8 == 0) return input;
-    	int offset = input.length % 8;
-    	byte[] output = new byte[input.length + (8 - offset)];
-    	int i = 0;
-    	for (; i < input.length; i++){
-    		output[i] = input[i];
-    	}
-    	for (; i < output.length; i++){
-    		output[i] = 0;
-    	}
-    	return output;
-    }
+  
 
     public void setKey(SecretKey keyPar) throws Exception {
     	key = keyPar;
@@ -71,13 +61,24 @@ public class KVCrypt {
     	cipher = Cipher.getInstance(algorithm);
     	decipher = Cipher.getInstance(algorithm);
     }
+    
+    private byte[] dealWithPadding(byte[] input){
+    	int blockSize = 8//Block byte length = 8
+    	int totalLength = input.length + padder.padLength(input.length);
+    	byte[] output = new byte[totalLength];
+    	int len = blockSize - (len % blockSize);
+    	byte paddingOctet = (byte) (len & 0xff);
+        for (int i = 0; i < len; i++) {
+            in[i + off] = paddingOctet;
+        }
+    }
 
     public byte[] encrypt(String input)
         throws InvalidKeyException, 
                BadPaddingException,
                IllegalBlockSizeException {
     	
-    	return cipher.doFinal(input.getBytes());
+    	return cipher.doFinal(padder.padWithLen(input.getBytes(), 0, padder.padLength(input.getBytes().length)));
     
     }
 

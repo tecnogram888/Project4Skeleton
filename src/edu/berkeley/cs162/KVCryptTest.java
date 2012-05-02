@@ -37,7 +37,6 @@ public class KVCryptTest {
 			 cryptor.setCipher();
 			 cryptor.setUp();
 			 String test1 = "Douglas James Davies";
-			 byte[] encrypted = cryptor.encrypt(test1);
 		} catch (Exception e) {
 			e.printStackTrace();
 			fail();
