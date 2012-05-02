@@ -33,9 +33,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.Serializable;
 import java.net.Socket;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * Implements NetworkHandler to handle 2PC operation requests from the Master/
+ * Handle 2PC operation requests from the Master/
  * Coordinator Server
  *
  */
@@ -45,6 +46,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private TPCLog<K, V> tpcLog = null;
 	
 	private boolean ignoreNext = false;
+	
+
+	private enum EState {
+		NOSTATE, WAIT, ABORT, COMMIT
+	}
+	private EState TPCState = EState.NOSTATE;
+	private ReentrantLock TPCStateLock = new ReentrantLock();
 
 	public TPCMasterHandler(KeyServer<K, V> keyserver) {
 		this(keyserver, 1);
@@ -55,26 +63,83 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		threadpool = new ThreadPool(connections);	
 	}
 
+	class getRunnable<K extends Serializable, V extends Serializable>implements Runnable {
+		TPCMessage message;
+		Socket client;
+
+		public getRunnable(TPCMessage msg){
+			this.message = msg;		
+		}
+		@Override
+		public void run() {
+			// try cache
+			// try KVStore
+			// send response to master
+		}
+	}
+	
+	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
+		TPCMessage message;
+		Socket client;
+
+		public processTPCOpRunnable(TPCMessage msg){
+			this.message = msg;
+		}
+		@Override
+		public void run() {
+			// try to do op, if can't, send abort, if can, send ready; we assume it always works
+			// write message to TPCLog
+			// send ready 
+			// TPCState == WAIT
+			while (true) {
+				switch (TPCState) {
+				case WAIT: 
+					
+					// listen for abort or commit
+					// write message to TPC Log
+					// go into proper state
+				case ABORT:
+					// abort and send ack and 
+				case COMMIT:
+					// commit and send ack and 
+				default:
+					// fail/error
+				}
+			}
+			
+		}
+	}
+	
 	@Override
 	public void handle(Socket client) throws IOException {
 		// implement me
 
 		InputStream in = client.getInputStream();
-		TPCMessage mess = null;
+		TPCMessage message = null;
 		
 		try {
-			mess = new TPCMessage(in);
+			message = new TPCMessage(in);
 		} catch (KVException e) {
 			
 			TPCClientHandler.sendMessage(client, e.getMsg());
 			return;
 		}
 
-		if (mess.getMsgType().equals("getreq")) {
-			
+		if (message.getMsgType().equals("getreq")) {
+			try {
+				threadpool.addToQueue(new getRunnable<K,V>(message));
+			} catch (InterruptedException e) {
+				//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			}
+		} else if (message.getMsgType().equals("putreq") || message.getMsgType().equals("delreq")) {
+			try {
+				threadpool.addToQueue(new processTPCOpRunnable<K,V>(message));
+			} catch (InterruptedException e) {
+				//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			}
+		} else {
+			// error
 		}
-		
-		
 	}
 
 	/**
