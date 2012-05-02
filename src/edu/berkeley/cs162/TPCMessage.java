@@ -87,7 +87,11 @@ public class TPCMessage implements Serializable {
 	// added by luke
 	Text text;
 	
-	// converts a KVMessage to a TPCMessage
+	/**
+	 *  converts a KVMessage to a TPCMessage
+	 * @param KVMessage inputMessage
+	 * @param String tpcOpID
+	 */
 	public TPCMessage(KVMessage inputMessage, String tpcOpID){
 		this.msgType = inputMessage.getMsgType();
 		this.key = inputMessage.getKey();
@@ -98,7 +102,14 @@ public class TPCMessage implements Serializable {
 		this.tpcOpId = tpcOpID;
 	}
 	
-	// for 2PC log ready's
+	/**
+	 *  for 2PC log ready's
+	 * @param String msgType
+	 * @param String key
+	 * @param String value
+	 * @param String message
+	 * @param String tpcOpId
+	 */
 	public TPCMessage(String msgType, String key, String value, String message, String tpcOpId) {
 		this.msgType = msgType;
 		this.key = key;
@@ -107,7 +118,13 @@ public class TPCMessage implements Serializable {
 		this.tpcOpId = tpcOpId;
 	}
 	
-	// for 2PC Put Requests
+	/**
+	 *  for 2PC Put Requests
+	 * @param String msgType
+	 * @param String key
+	 * @param String value
+	 * @param String tpcOpId
+	 */
 	public TPCMessage(String msgType, String key, String value, String tpcOpId) {
 		this.msgType = msgType;
 		this.key = key;
@@ -115,7 +132,13 @@ public class TPCMessage implements Serializable {
 		this.tpcOpId = tpcOpId;
 	}
 	
-	// for 2PC Del Requests and 2PC Abort messages
+	/**
+	 *  for 2PC Del Requests and 2PC Abort messages
+	 * @param String msgType
+	 * @param String keyORmessage
+	 * @param String tpcOpId
+	 * @param boolean isDelRequest
+	 */
 	public TPCMessage(String msgType, String keyORmessage, String tpcOpId, boolean isDelRequest) {
 		this.msgType = msgType;
 		this.tpcOpId = tpcOpId;
@@ -130,19 +153,29 @@ public class TPCMessage implements Serializable {
 		}
 	}
 	
-	// for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, 2PCLog commit, and KeyRequest
+	/**
+	 *  2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, 2PC IgnoreNext
+	 *	Register, Registration ACK, 
+	 *	Error Message, Server response, 
+	 *	2PCLog abort, 2PCLog commit, and KeyRequest
+	 * @param String msgType
+	 * @param String tpcOpIdORmessageORkey
+	 */
 	public TPCMessage(String msgType, String tpcOpIdORmessageORkey) {
 		this.msgType = msgType;
 		if ("ready".equals(msgType) || "commit/abort".equals(msgType) || "ack".equals(msgType) || "commit".equals(msgType) || "abort".equals(msgType)){
 			this.tpcOpId = tpcOpIdORmessageORkey;
-		} else if ("register".equals(msgType) || "resp".equals(msgType)){	
+		} else if ("register".equals(msgType) || "resp".equals(msgType) || "ignoreNext".equals(msgType)){	
 			this.message = tpcOpIdORmessageORkey;
 		} else if ("getreq".equals(msgType)){
 			this.key = tpcOpIdORmessageORkey;
 		}
 	}
 	
-	// for Encryption Key Request
+	/**
+	 *  for Encryption Key Request
+	 * @param String msgType
+	 */
 	public TPCMessage(String msgType) {
 		this.msgType = msgType;
 		

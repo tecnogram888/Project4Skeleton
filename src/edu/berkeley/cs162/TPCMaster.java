@@ -83,6 +83,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			addToConsistentHash(newSlave);
+			if (consistentHash.size() == listOfSlaves.length)
+				consistentHash.notify();
 
 			try {
 				out = new PrintWriter(client.getOutputStream(), true);
@@ -205,6 +207,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	//added by Doug
 	private ReentrantReadWriteLock consistantHashLock = new ReentrantReadWriteLock();
 
+	public String[] listOfSlaves;
+
+
 	/**
 	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers 
 	 * actually register to let TPCMaster know their spresence
@@ -212,9 +217,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param listOfSlaves list of SlaveServers in "SlaveServerID@HostName:Port" format
 	 * @throws Exception
 	 */
-	public TPCMaster(String[] listOfSlaves) throws Exception {
+	public TPCMaster(String[] slaves) throws Exception {
 		// implement me
-
+		listOfSlaves = slaves;
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
@@ -237,12 +242,27 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-		// TODO implement me
+		// TODO run regServer and clientServer on different threads
 		try {
-			regServer.run();
-			clientServer.run(); 
+			// create a runnable and thread for regServer
+			class regServerRunnable implements Runnable {@Override public void run() {try {regServer.run();} catch (IOException e) {e.printStackTrace();}}}
+			Thread regServerThread = new Thread(new regServerRunnable());
+			regServerThread.start();
+			// TODO clientServer needs to wait until all the slaves are registered
+			while (consistentHash.size() != listOfSlaves.length) {
+				// sleep clientServer
+				try {
+					consistentHash.wait();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			clientServer.run();
+
 		} catch (IOException e) {
 			// TODO
+			System.err.println("IO exception caught");
 		}
 	}
 
@@ -561,23 +581,74 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @return Value corresponding to the Key
 	 * @throws KVException
 	 */
-	public V handleGet(KVMessage msg) throws KVException {
-		// implement me
-		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
-		if (temp == null) {
-			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+	class getRunnable<K extends Serializable, V extends Serializable> implements Runnable {
+		KVMessage message;
+		SlaveInfo slaveServer;
+		
+		public getRunnable (KVMessage msg, SlaveInfo replica){
+			this.message = msg;
+			this.slaveServer = replica;
 		}
-		temp.readLock().lock();
-
-		// TODO: SOLOMON try cache
-
-		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		
+		@Override
+		public void run(){
+			// send/receive request to first slave
+			KVMessage resp1;
+			try {
+				resp1 = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
+			} catch (KVException e) {
+				KVClientHandler.sendMessage(client, e.getMsg());
+				return;
+			}
+			if (!"resp".equals(resp1.getMessage())){
+				// TODO this should not happen, so crash the server if it does
+				System.exit(1);
+				// temp.readLock().unlock();
+				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+			}
+		}
+	}
+	
+	public V handleGet(KVMessage msg) throws KVException {
 		if (!"getreq".equals(msg.getMsgType())){
 			// TODO this should not happen, so crash the server if it does
 			System.exit(1);
 			// temp.readLock().unlock();
 			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 		}
+		
+		// implement me
+				ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
+				if (accessLock == null) {
+					accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+				}
+				accessLock.readLock().lock();
+				try {
+					SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+					SlaveInfo successor = findSuccessor(firstReplica);
+					threadpool.addToQueue(
+							new getRunnable<K,V>(msg, firstReplica));
+					threadpool.addToQueue(
+							new processTPCOpRunnable<K,V>(TPCmess, successor));
+					// TODO DOUG sleeping on threads
+				} catch (InterruptedException e) {
+					//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+					accessLock.writeLock().unlock();
+					return false;
+				} catch (KVException e){
+					//sendMessage(client, e.getMsg());
+					accessLock.writeLock().unlock();
+					return false;
+				}
+
+				// TODO SOLOMON Update cache
+				accessLock.writeLock().unlock();
+				return true;
+
+		// TODO: SOLOMON try cache
+
+		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
+		
 
 		// find first replica
 		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
@@ -614,6 +685,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return (V) KVMessage.decodeObject(resp1.getValue());
 		}
 	}
+	public static void sendMessage(Socket client, KVMessage message){
+		sendRecieveKV(KVMessage InputMessage, String server, int port);
+	}
+	
 	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {
 		String xmlFile = InputMessage.toXML();
 		KVMessage returnMessage;
