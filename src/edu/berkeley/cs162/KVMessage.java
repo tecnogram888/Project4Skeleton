@@ -116,6 +116,10 @@ public class KVMessage{
 		return message;
 	}
 	
+	public boolean getIsPutResp(){
+		return isPutResp;
+	}
+	
 	public boolean hasEmptyKey(){
 		return (key == null | key.length() == 0 | key.isEmpty());
 	}
