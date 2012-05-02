@@ -83,6 +83,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			addToConsistentHash(newSlave);
+			if (consistentHash.size() == listOfSlaves.length)
+				consistentHash.notify();
 
 			try {
 				out = new PrintWriter(client.getOutputStream(), true);
@@ -202,6 +204,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	private Condition otherThreadDone = TPCStateLock.newCondition();
+	public String[] listOfSlaves;
 
 	/**
 	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers 
@@ -210,9 +213,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param listOfSlaves list of SlaveServers in "SlaveServerID@HostName:Port" format
 	 * @throws Exception
 	 */
-	public TPCMaster(String[] listOfSlaves) throws Exception {
+	public TPCMaster(String[] slaves) throws Exception {
 		// implement me
-
+		listOfSlaves = slaves;
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
@@ -235,12 +238,27 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-		// TODO implement me
+		// TODO run regServer and clientServer on different threads
 		try {
-			regServer.run();
-			clientServer.run(); 
+			// create a runnable and thread for regServer
+			class regServerRunnable implements Runnable {@Override public void run() {try {regServer.run();} catch (IOException e) {e.printStackTrace();}}}
+			Thread regServerThread = new Thread(new regServerRunnable());
+			regServerThread.start();
+			// TODO clientServer needs to wait until all the slaves are registered
+			while (consistentHash.size() != listOfSlaves.length) {
+				// sleep clientServer
+				try {
+					consistentHash.wait();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+			clientServer.run();
+
 		} catch (IOException e) {
 			// TODO
+			System.err.println("IO exception caught");
 		}
 	}
 
