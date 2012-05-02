@@ -6,6 +6,8 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESedeKeySpec;
@@ -31,16 +33,26 @@ public class KVCryptTest {
 			} catch (InvalidKeySpecException e) {
 				fail();
 			}
-	    
+		String test1 = "Douglas James Davies";
 	    try {
 			 cryptor.setKey(dougKey);
 			 cryptor.setCipher();
 			 cryptor.setUp();
-			 String test1 = "Douglas James Davies";
+			 
 		} catch (Exception e) {
 			e.printStackTrace();
 			fail();
 		}
+	    
+	    try {
+			String test2 = new String(cryptor.encrypt(test1));
+			String test3 = cryptor.decrypt(test2.getBytes());
+			assertEquals(test1, test3);
+		} catch (Exception e) {
+			e.printStackTrace();
+			fail();
+		}
+	    	
 	   
 	    
 	}
