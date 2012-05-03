@@ -301,7 +301,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 		if (message.getMsgType().equals("getreq")) {
 			if(!checkValue(message.getValue())){
-				// throw exception or send error message or DO SOMETHING
+				// TODO throw exception or send error message or DO SOMETHING
 			}
 			try {
 				threadpool.addToQueue(new getRunnable<K,V>((K)TPCMessage.decodeObject(message.getKey()), keyserver, master, message.getTpcOpId()));
@@ -314,8 +314,8 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		} else if (message.getMsgType().equals("putreq")){
 			try {
 				threadpool.addToQueue(new putRunnable<K,V>(
-						(K)KVMessage.decodeObject(message.getKey()), 
-						(V)KVMessage.decodeObject(message.getValue()), 
+						(K)TPCMessage.decodeObject(message.getKey()), 
+						(V)TPCMessage.decodeObject(message.getValue()), 
 						keyserver, master,message.getTpcOpId(), message));
 			} catch (InterruptedException e) {
 				//TODO check if this is right
@@ -327,7 +327,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		} else if (message.getMsgType().equals("delreq")){
 			try {
 				threadpool.addToQueue(new delRunnable<K,V>(
-						(K)KVMessage.decodeObject(message.getKey()), 
+						(K)TPCMessage.decodeObject(message.getKey()), 
 						keyserver, master,message.getTpcOpId(), message));
 			} catch (InterruptedException e) {
 				//TODO check if this is right

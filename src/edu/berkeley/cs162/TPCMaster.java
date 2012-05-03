@@ -69,6 +69,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		@Override
 		public void handle(Socket client) throws IOException {
 			PrintWriter out = null;
+			// TODO in is not used...
 			InputStream in = null;
 			SlaveInfo newSlave = null;
 			TPCMessage registration = null;
@@ -102,6 +103,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			out.println(xmlFile);
 			try {
 				client.shutdownOutput();
+				// added by luke
+				client.close();
+				out.close();
 			} catch (IOException e) {
 				System.err.println("could not shutdown client ouptut");
 			}
@@ -246,7 +250,17 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 		try {
 			// create a runnable and thread for regServer
-			class regServerRunnable implements Runnable {@Override public void run() {try {regServer.run();} catch (IOException e) {e.printStackTrace();}}}
+			class regServerRunnable implements Runnable {
+				
+				@Override 
+				public void run() {
+					try {
+						regServer.run();
+						} catch (IOException e) {
+							e.printStackTrace();
+							}
+					}
+				}
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
 			while (consistentHash.size() != listOfSlaves.length) {
@@ -381,7 +395,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 					b1 = false;//Set boolean to false when starting a section, true when finished.
 					try {
+						// send the request to the slaveServer
 						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						
 						// check to see if response is ready or abort
 						if ("ready".equals(response.getMsgType())){
 							TPCStateLock.lock();
@@ -516,16 +532,16 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// get the next TPC Op ID
 		String TPCOpId = getNextTpcOpId();
 		TPCMessage TPCmess = new TPCMessage(msg, TPCOpId);		
-		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
+		ReentrantReadWriteLock temp = accessLocks.get(TPCmess.getKey());
 		if (temp == null) {
-			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+			accessLocks.put(TPCmess.getKey(), new ReentrantReadWriteLock());
 		}
 		temp.writeLock().lock();
 		TPCStateLock.lock();
 		TPCState = EState.INIT;
 		TPCStateLock.unlock();
 		try {
-			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(TPCmess.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
 			Boolean b1 = new Boolean(false);
 			Boolean b2 = new Boolean(false);
@@ -676,10 +692,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		accessLock.writeLock().unlock();
 		return value;
 
-	}
-	
-	public static void sendMessage(Socket client, KVMessage message){
-		sendRecieveKV(KVMessage InputMessage, String server, int port);
 	}
 	
 	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {
