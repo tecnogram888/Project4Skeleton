@@ -66,31 +66,32 @@ public class TPCLogTest {
 		TPCLog log = new TPCLog ("logPath", server);
 		
 		//adds put request & abort
-		TPCMessage put2 = new TPCMessage ("ready", "key3", "value3", "putreq", "3");
+		TPCMessage put2 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
 		log.appendAndFlush(put2);
-		TPCMessage abortPut2 = new TPCMessage ("abort", "3");
+		TPCMessage abortPut2 = new TPCMessage ("abort", "1");
 		log.appendAndFlush(abortPut2);
 		
 		//adds put request & commit
-		TPCMessage put1 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
+		TPCMessage put1 = new TPCMessage ("ready", "key2", "value2", "putreq", "2");
 		log.appendAndFlush(put1);
-		TPCMessage commitPut1 = new TPCMessage ("commit", "1");
+		TPCMessage commitPut1 = new TPCMessage ("commit", "2");
 		log.appendAndFlush(commitPut1);
 		
 		//adds del request & abort
-		TPCMessage del2 = new TPCMessage("read", "key4", "delreq", "4");
+		TPCMessage del2 = new TPCMessage("ready", "key3", "delreq", "3");
 		log.appendAndFlush(del2);
-		TPCMessage abortDel2 = new TPCMessage ("abort","2");
+		TPCMessage abortDel2 = new TPCMessage ("abort","3");
 		log.appendAndFlush(abortDel2);
 		
 		//adds del request & commit
-		TPCMessage del1 = new TPCMessage("read", "key2", "delreq", "2");
+		TPCMessage del1 = new TPCMessage("ready", "key4", "delreq", "4");
 		log.appendAndFlush(del1);
-		TPCMessage commitDel1 = new TPCMessage ("commit","2");
+		TPCMessage commitDel1 = new TPCMessage ("commit","4");
 		log.appendAndFlush(commitDel1);
 		
-		KeyServer<String, String> server2 = new KeyServer<String, String>(10);
-		TPCLog log2 = new TPCLog ("logpath2", server2);
+//		KeyServer<String, String> server2 = new KeyServer<String, String>(10);
+		String logPath = log.logPath;
+		TPCLog log2 = new TPCLog (logPath, server);
 		try {
 			log2.rebuildKeyServer();
 		} catch (KVException e) {

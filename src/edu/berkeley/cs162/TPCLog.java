@@ -39,7 +39,8 @@ import java.util.ArrayList;
 
 public class TPCLog<K extends Serializable, V extends Serializable> {
 
-	private String logPath = null;
+	//originally: private String logPath = null;
+	String logPath = null;
 	private KeyServer<K, V> keyServer = null;
 
 	// Log entries
