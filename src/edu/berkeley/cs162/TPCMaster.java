@@ -250,7 +250,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
 			while (consistentHash.size() != listOfSlaves.length) {
-				// sleep clientServer
+				// TODO sleep clientServer
 				synchronized(consistentHash){
 				try {
 					consistentHash.wait();
@@ -369,23 +369,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 		@Override
 		public void run() {
-			/*
-			boolean b = false;
-			try {
-				b = keyserver.put(key, value);
-			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
-				return;
-			}
-			KVMessage message = new KVMessage(b, "Success");
-			KVClientHandler.sendMessage(client, message);
-			try {
-				client.close();
-			} catch (IOException e) {
-				// These ones don't send errors, this is a server error
-				e.printStackTrace();
-			}
-			 */
 			//TODO Luke,Soloman,Doug need to change 'message' after the loop so we send different messages, reset the field at the end of each conditional block
 			while (true) {
 				switch (TPCState) {
@@ -566,6 +549,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 
 		// TODO SOLOMON Update cache
+		// if (put) { cache.put() }
+		// if (del) {cache.del() }
 		temp.writeLock().unlock();
 		transactionLock.unlock();
 		return true;
@@ -604,7 +589,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} catch (KVException e) {
 				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
 					// Connection timed out
-					// TODO Move on to next slaveServer
+					// Move on to next slaveServer
 				} else {
 					e.printStackTrace();
 					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
@@ -619,6 +604,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} else {
 				slaveAnswer.getValue();
 				// TODO return the value to parent thread somehow
+				// wake up the parent
 			}
 			// if it gets here, response was wrong so try second replica
 
@@ -627,7 +613,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} catch (KVException e) {
 				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
 					// Connection timed out
-					// TODO Move on to next slaveServer
 				} else {
 					e.printStackTrace();
 					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
@@ -642,6 +627,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} else {
 				slaveAnswer.getValue();
 				// TODO return the value to parent thread somehow
+				// wake up the parent
 			}
 			// if it gets here both didn't work
 			// TODO
@@ -661,66 +647,35 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
 		}
 		accessLock.readLock().lock();
-		
-		try {
-			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
-			SlaveInfo successor = findSuccessor(firstReplica);
-			threadpool.addToQueue(
-					new getRunnable<K,V>(msg, firstReplica, successor));
-			// TODO DOUG sleeping on threads
-		} catch (InterruptedException e) {
-			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
-			accessLock.writeLock().unlock();
-			return false;
-		} catch (KVException e){
-			//sendMessage(client, e.getMsg());
-			accessLock.writeLock().unlock();
-			return false;
-		}
-
-		// TODO SOLOMON Update cache
-		accessLock.writeLock().unlock();
-		return true;
-
-		// TODO: SOLOMON try cache
-
-		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
-
-
-		// find first replica
-		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
-
-		// send/receive request to first slave
-		KVMessage resp1 = sendRecieveKV(msg, firstReplica.hostName, firstReplica.port);
-		if (!"resp".equals(resp1.getMessage())){
-			// TODO this should not happen, so crash the server if it does
-			System.exit(1);
-			// temp.readLock().unlock();
-			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
-		}
-
-		//TODO check if this is correct
-		if (resp1.getValue() == null){ // First replica failed
-			// try second replica
-			SlaveInfo secondReplica = findSuccessor(firstReplica);
-
-			// send/receive request to first slave
-			KVMessage resp2 = sendRecieveKV(msg, secondReplica.hostName, secondReplica.port);
-			if (!"resp".equals(resp2.getMessage())) throw new KVException(new KVMessage("handleGet received a crappy response message"));
-
-			if (resp2.getValue() == null){ // Second replica also failed
-				temp.readLock().unlock();
-				throw new KVException(new KVMessage("@"+firstReplica.slaveID+"=>"+resp1.getMessage()+"\n"+"@"+secondReplica.slaveID+"=>"+resp2.getMessage()));
-			} else{
-				// First replica failed, second replica succeeded
-				temp.readLock().unlock();
-				return (V) KVMessage.decodeObject(resp2.getValue());
+		// TODO Try cache
+		V value = masterCache.get((K) KVMessage.decodeObject(msg.getKey()));
+		if (value == null) {
+			try {
+				SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+				SlaveInfo successor = findSuccessor(firstReplica);
+				threadpool.addToQueue(
+						new getRunnable<K,V>(msg, firstReplica, successor));
+				// TODO DOUG sleeping on threads
+				// value somehow gets set to the proper value
+				if (value != null) {
+					masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
+				} else {
+					// ERROR? Or OK to return null when neither slaveServer has it
+				}
+			} catch (InterruptedException e) {
+				//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+				accessLock.writeLock().unlock();
+				return null;
+			} catch (KVException e){
+				//sendMessage(client, e.getMsg());
+				accessLock.writeLock().unlock();
+				return null;
 			}
-		} else{
-			// first replica succeeded
-			temp.readLock().unlock();
-			return (V) KVMessage.decodeObject(resp1.getValue());
 		}
+
+		accessLock.writeLock().unlock();
+		return value;
+
 	}
 	
 	public static void sendMessage(Socket client, KVMessage message){

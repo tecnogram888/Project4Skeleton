@@ -39,7 +39,9 @@ import java.io.Serializable;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.util.Hashtable;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.xml.bind.DatatypeConverter;
 
@@ -53,9 +55,10 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private ThreadPool threadpool = null;
 	private TPCLog<K, V> tpcLog = null;
 
+	private Hashtable<K, ReentrantReadWriteLock> accessLocks = 
+			new Hashtable<K, ReentrantReadWriteLock>();
 	private boolean ignoreNext = false;
-
-
+	private ReentrantLock transactionLock = new ReentrantLock();
 	private enum EState {
 		NOSTATE, WAIT, ABORT, COMMIT
 	}
@@ -86,6 +89,11 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 		@Override
 		public void run() {
+			ReentrantReadWriteLock accessLock = accessLocks.get(key);
+			if (accessLock == null) {
+				accessLocks.put((K) key, new ReentrantReadWriteLock());
+			}
+			accessLock.readLock().lock();
 			// call get function and send answer to master
 			V value = null;
 			try {
@@ -111,7 +119,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
 			}
-			// send response to master
+			accessLock.readLock().unlock();
 		}
 	}
 
@@ -134,6 +142,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		}
 		@Override
 		public void run() {
+			transactionLock.lock();
 			// try to do op, if can't, send abort, if can, send ready; we assume it always works
 			// write message to TPCLog
 			// send ready message to master
@@ -158,45 +167,41 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				sendTPCMessage(master, new TPCMessage("abort", e.getMsg().getMessage(), TpcOpID, false));
 			}
 			if ("commit".equals(reply.getMsgType())){
-				//TODO SOLOMON DO LOCKS
 				TPCState = EState.COMMIT;
 			} else if ("abort".equals(reply.getMsgType())){
-				//TODO SOLOMON DO LOCKS
 				TPCState = EState.ABORT;
 			} else{
 				//  TODO throw exception
 			}
-			while (true) {
-				switch (TPCState) {
-				/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
+			switch (TPCState) {
+			/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
 				  	case WAIT: 
 					// listen for abort or commit
 					// write message to TPC Log
 					// go into proper state*/
-				case ABORT:
-					// abort
-					TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-					TPCMasterHandler.sendTPCMessage(master, ackMessage);
-				case COMMIT:
-					//TODO Solomon Do cache and KVStore stuff
-					try {
-						keyserver.put(key, value);
-					} catch (KVException e) {
-						TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
-						return;
-					}
-					TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
-					TPCMasterHandler.sendTPCMessage(master, ackmessage);					
-				default:
-					// TODO fail/error
-				}
-				TPCState = EState.NOSTATE;
+			case ABORT:
+				// abort
+				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMasterHandler.sendTPCMessage(master, ackMessage);
+			case COMMIT:
 				try {
-					master.close();
-				} catch (IOException e) {
-					// These ones don't send errors, this is a server error
-					e.printStackTrace();
+					keyserver.put(key, value);
+				} catch (KVException e) {
+					TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
+					return;
 				}
+				TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
+				TPCMasterHandler.sendTPCMessage(master, ackmessage);					
+			default:
+				// TODO fail/error
+			}
+			TPCState = EState.NOSTATE;
+			transactionLock.unlock();
+			try {
+				master.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
 			}
 		}
 	}
@@ -218,6 +223,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		}
 		@Override
 		public void run() {
+			transactionLock.lock();
 			// try to do op, if can't, send abort, if can, send ready; we assume it always works
 			// write message to TPCLog
 			// send ready message to master
@@ -238,45 +244,41 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				sendTPCMessage(master, new TPCMessage("abort", e.getMsg().getMessage(), TpcOpID, false));
 			}
 			if ("commit".equals(reply.getMsgType())){
-				//TODO SOLOMON DO LOCKS
 				TPCState = EState.COMMIT;
 			} else if ("abort".equals(reply.getMsgType())){
-				//TODO SOLOMON DO LOCKS
 				TPCState = EState.ABORT;
 			} else{
 				//  TODO throw exception
 			}
-			while (true) {
-				switch (TPCState) {
-				/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
+			switch (TPCState) {
+			/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
 				  	case WAIT: 
 					// listen for abort or commit
 					// write message to TPC Log
 					// go into proper state*/
-				case ABORT:
-					// abort
-					TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-					TPCMasterHandler.sendTPCMessage(master, ackMessage);
-				case COMMIT:
-					//TODO Solomon Do cache and KVStore stuff
-					try {
-						keyserver.del(key);
-					} catch (KVException e) {
-						TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
-						return;
-					}
-					TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
-					TPCMasterHandler.sendTPCMessage(master, ackmessage);					
-				default:
-					// TODO fail/error
-				}
-				TPCState = EState.NOSTATE;
+			case ABORT:
+				// abort
+				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMasterHandler.sendTPCMessage(master, ackMessage);
+			case COMMIT:
 				try {
-					master.close();
-				} catch (IOException e) {
-					// These ones don't send errors, this is a server error
-					e.printStackTrace();
+					keyserver.del(key);
+				} catch (KVException e) {
+					TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
+					return;
 				}
+				TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
+				TPCMasterHandler.sendTPCMessage(master, ackmessage);					
+			default:
+				// TODO fail/error
+			}
+			TPCState = EState.NOSTATE;
+			transactionLock.unlock();
+			try {
+				master.close();
+			} catch (IOException e) {
+				// These ones don't send errors, this is a server error
+				e.printStackTrace();
 			}
 		}
 	}
@@ -284,11 +286,8 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	@Override
 	public void handle(Socket master) throws IOException {
 		// implement me
-
-		//TODO Solomon: DO ALL LOCKS
-
+		
 		//TODO turn GET into TPCMessage
-
 
 		InputStream in = master.getInputStream();
 		TPCMessage message = null;
@@ -301,7 +300,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		}
 
 		if (message.getMsgType().equals("getreq")) {
-			//TODO Solomon lock accessLock
 			if(!checkValue(message.getValue())){
 				// throw exception or send error message or DO SOMETHING
 			}
@@ -314,10 +312,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				return;
 			}
 		} else if (message.getMsgType().equals("putreq")){
-			//TODO Solomon lock transaction lock
-			//TODO Solomon lock accessLock
-			//TODO Solomon lock estateLock
-			//TODO Solomon change estatelock
 			try {
 				threadpool.addToQueue(new putRunnable<K,V>(
 						(K)KVMessage.decodeObject(message.getKey()), 
@@ -331,10 +325,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				return;
 			}
 		} else if (message.getMsgType().equals("delreq")){
-			//TODO Solomon lock transaction lock
-			//TODO Solomon lock accessLock
-			//TODO Solomon lock estateLock
-			//TODO Solomon change estatelock
 			try {
 				threadpool.addToQueue(new delRunnable<K,V>(
 						(K)KVMessage.decodeObject(message.getKey()), 
