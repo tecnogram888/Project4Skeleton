@@ -74,7 +74,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		threadpool = new ThreadPool(connections);	
 	}
 
-	class getRunnable<K extends Serializable, V extends Serializable> implements Runnable {
+	class getRunnable implements Runnable {
 		K key;
 		KeyServer<K, V> keyserver;
 		Socket master;
@@ -304,7 +304,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				// TODO throw exception or send error message or DO SOMETHING
 			}
 			try {
-				threadpool.addToQueue(new getRunnable<K,V>((K)TPCMessage.decodeObject(message.getKey()), keyserver, master, message.getTpcOpId()));
+				threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(message.getKey()), keyserver, master, message.getTpcOpId()));
 			} catch (InterruptedException e) {
 				TPCMasterHandler.sendTPCMessage(master, new TPCMessage("resp", "Unknown Error: InterruptedException from the threadpool"));
 			} catch (KVException e){
