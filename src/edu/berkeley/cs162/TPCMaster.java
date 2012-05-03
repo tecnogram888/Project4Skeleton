@@ -68,8 +68,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		@Override
 		public void handle(Socket client) throws IOException {
-			// implement me
 			PrintWriter out = null;
+			// TODO in is not used...
 			InputStream in = null;
 			SlaveInfo newSlave = null;
 			TPCMessage registration = null;
@@ -83,8 +83,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			addToConsistentHash(newSlave);
-			if (consistentHash.size() == listOfSlaves.length)
+			synchronized(consistentHash){
+			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
 				consistentHash.notify();
+			}
 
 			try {
 				out = new PrintWriter(client.getOutputStream(), true);
@@ -101,6 +103,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			out.println(xmlFile);
 			try {
 				client.shutdownOutput();
+				// added by luke
+				client.close();
+				out.close();
 			} catch (IOException e) {
 				System.err.println("could not shutdown client ouptut");
 			}
@@ -204,7 +209,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	private Condition otherThreadDone = TPCStateLock.newCondition();
+	//added by Doug
+	private ReentrantReadWriteLock consistantHashLock = new ReentrantReadWriteLock();
+
 	public String[] listOfSlaves;
+
 
 	/**
 	 * Creates TPCMaster using SlaveInfo provided as arguments and SlaveServers 
@@ -238,20 +247,31 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-		// TODO run regServer and clientServer on different threads
+	
 		try {
 			// create a runnable and thread for regServer
-			class regServerRunnable implements Runnable {@Override public void run() {try {regServer.run();} catch (IOException e) {e.printStackTrace();}}}
+			class regServerRunnable implements Runnable {
+				
+				@Override 
+				public void run() {
+					try {
+						regServer.run();
+						} catch (IOException e) {
+							e.printStackTrace();
+							}
+					}
+				}
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
-			// TODO clientServer needs to wait until all the slaves are registered
 			while (consistentHash.size() != listOfSlaves.length) {
-				// sleep clientServer
+				// TODO sleep clientServer
+				synchronized(consistentHash){
 				try {
 					consistentHash.wait();
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
+					// TODO Doug how to handle this issue? In this, just die I think
 					e.printStackTrace();
+				}
 				}
 			}
 			clientServer.run();
@@ -300,8 +320,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param newSlave
 	 */
 	public synchronized void addToConsistentHash(SlaveInfo newSlave) {
+		
 		Long x = newSlave.getSlaveID();
+		consistantHashLock.writeLock().lock();
 		consistentHash.put(x, newSlave);
+		consistantHashLock.writeLock().unlock();
 	}
 
 	/**
@@ -314,6 +337,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		long hashedKey = hashTo64bit(key.toString());
 
 		// implement me
+		consistantHashLock.readLock().lock();
 		if (consistentHash.isEmpty()) { return null; }
 		SlaveInfo temp = consistentHash.get(
 				((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(hashedKey) );
@@ -321,6 +345,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return consistentHash.get(
 					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
 		}
+		consistantHashLock.readLock().unlock();
 		return temp;
 	}
 
@@ -331,6 +356,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	private SlaveInfo findSuccessor(SlaveInfo firstReplica) {
 		// implement me
+		consistantHashLock.readLock().lock();
 		if (consistentHash.isEmpty()) { return null; }
 		SlaveInfo temp = consistentHash.get(
 				((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(firstReplica.getSlaveID() + 1) );
@@ -338,6 +364,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return consistentHash.get(
 					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
 		}
+		consistantHashLock.readLock().unlock();
 		return temp;
 	}
 
@@ -345,53 +372,47 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		TPCMessage message;
 		Socket client;
 		SlaveInfo slaveServerInfo;
+		
+		Boolean b1, b2;
 
-		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo){
+		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo, Boolean _b1, Boolean _b2){
 			this.message = msg;
-			this.slaveServerInfo = slaveServerInfo;			
+			this.slaveServerInfo = slaveServerInfo;
+			this.b1 = _b1;
+			this.b2 = _b2;
 		}
 		@Override
 		public void run() {
-			/*
-			boolean b = false;
-			try {
-				b = keyserver.put(key, value);
-			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
-				return;
-			}
-			KVMessage message = new KVMessage(b, "Success");
-			KVClientHandler.sendMessage(client, message);
-			try {
-				client.close();
-			} catch (IOException e) {
-				// These ones don't send errors, this is a server error
-				e.printStackTrace();
-			}
-			 */
+			//TODO Luke,Soloman,Doug need to change 'message' after the loop so we send different messages, reset the field at the end of each conditional block
 			while (true) {
 				switch (TPCState) {
 				// send the appropriate message to client
 				case INIT: 
-					if (!"putreq".equals(message.getMsgType()) || !"delreq".equals(message.getMsgType())){
+					if (!"putreq".equals(message.getMsgType()) && !"delreq".equals(message.getMsgType())){
+						//TODO Doug how to handle this error?
 						System.err.println("INIT did not get a putreq or delreq");
 						System.exit(1);
 					}
+					b1 = false;//Set boolean to false when starting a section, true when finished.
 					try {
+						// send the request to the slaveServer
 						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						
 						// check to see if response is ready or abort
 						if ("ready".equals(response.getMsgType())){
 							TPCStateLock.lock();
-							if (TPCState == EState.COMMIT){
-								otherThreadDone.notifyAll();
-							} else if (TPCState == EState.ABORT){
+							if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
+								b1 = true;
 								otherThreadDone.notifyAll();
 							} else {
 								TPCState = EState.COMMIT;
 								try {
-									TPCStateLock.unlock();
-									otherThreadDone.wait();
+									b1 = true;
+									while (!(b1 && b2)) otherThreadDone.await();
+									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+									//otherThreadDone.wait();
 								} catch (InterruptedException e) {
+									//TODO Doug how to handle this error?
 									System.err.println("INIT messed up when trying to wait");
 									e.printStackTrace();
 									System.exit(1);
@@ -404,25 +425,30 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 								// other thread is has not finished yet
 								TPCState = EState.ABORT;
 								TPCStateLock.unlock();
-								// TODO DOUG what do do if context switch
 								try {
-									otherThreadDone.wait();
+									b1 = true;
+									while (!(b1 && b2)) otherThreadDone.await();
+									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
 								} catch (InterruptedException e) {
+									//TODO Doug how to handle this error?
 									System.err.println("INIT messed up when trying to wait");
 									e.printStackTrace();
 									System.exit(1);
 								}
 							} else{
 								// if the other thread already finished and is waiting
+								b1 = true;
 								otherThreadDone.notifyAll();
 							}		
 							// check if other guy is sleeping, if so wake him up, if not go to sleep
 							TPCStateLock.unlock();
 						} else{
+							//TODO Doug How to handle this error?
 							System.err.println("Coordinator did not get a ready or abort response");
 							System.exit(1);
 						}
 					} catch (KVException e) {
+						//TODO Doug is this how we should handle errors?
 						if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
 							// Connection timed out
 							TPCStateLock.lock();
@@ -435,10 +461,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 					break;
 				case ABORT:
+					b1 = false;//False at start of section
 					try {
 						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
 						// check to see if response is ready or abort
 						if (!"ack".equals(response.getMsgType())){
+							//TODO Doug how to handle this error?
 							System.err.println("ABORT did not get a correct ack");
 							System.exit(1);
 						}
@@ -451,13 +479,18 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							e.printStackTrace();
 						}
 					}
+					b1 = true;//Finished Abort section
+					otherThreadDone.notifyAll();
+					TPCState = EState.NOSTATE;
 					return;
-					//TODO DOUG wake up booleans here and set TPCState to NOSTATE
+					
 				case COMMIT:
+					b1 = false;//Start of section
 					try {
 						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
 						// check to see if response is ready or abort
 						if (!"ack".equals(response.getMsgType())){
+							//TODO Doug how to handle this error?
 							System.err.println("COMMIT did not get a correct ack");
 							System.exit(1);
 						}
@@ -470,8 +503,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							e.printStackTrace();
 						}
 					}
+					b1 = true;
+					otherThreadDone.notifyAll();
+					TPCState = EState.NOSTATE;
 					return;
-					//TODO DOUG wake up booleans here and set TPCState to NOSTATE
+					
 				default: 
 					return;
 				}
@@ -496,22 +532,26 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// get the next TPC Op ID
 		String TPCOpId = getNextTpcOpId();
 		TPCMessage TPCmess = new TPCMessage(msg, TPCOpId);		
-		ReentrantReadWriteLock temp = accessLocks.get(msg.getKey());
+		ReentrantReadWriteLock temp = accessLocks.get(TPCmess.getKey());
 		if (temp == null) {
-			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+			accessLocks.put(TPCmess.getKey(), new ReentrantReadWriteLock());
 		}
 		temp.writeLock().lock();
 		TPCStateLock.lock();
 		TPCState = EState.INIT;
 		TPCStateLock.unlock();
 		try {
-			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(TPCmess.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
+			Boolean b1 = new Boolean(false);
+			Boolean b2 = new Boolean(false);
 			threadpool.addToQueue(
-					new processTPCOpRunnable<K,V>(TPCmess, firstReplica));
+					new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2));
 			threadpool.addToQueue(
-					new processTPCOpRunnable<K,V>(TPCmess, successor));
-			// TODO DOUG sleeping on threads
+					new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1));
+			while (!(b1 && b2)){
+				b1.wait();
+			}
 		} catch (InterruptedException e) {
 			//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
 			temp.writeLock().unlock();
@@ -525,6 +565,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 
 		// TODO SOLOMON Update cache
+		// if (put) { cache.put() }
+		// if (del) {cache.del() }
 		temp.writeLock().unlock();
 		transactionLock.unlock();
 		return true;
@@ -545,28 +587,66 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	class getRunnable<K extends Serializable, V extends Serializable> implements Runnable {
 		KVMessage message;
 		SlaveInfo slaveServer;
+		SlaveInfo successor;
 		
-		public getRunnable (KVMessage msg, SlaveInfo replica){
+		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor){
 			this.message = msg;
-			this.slaveServer = replica;
+			this.slaveServer = firstReplica;
+			this.successor = successor;
 		}
 		
 		@Override
 		public void run(){
 			// send/receive request to first slave
-			KVMessage resp1;
+			KVMessage slaveAnswer = null;
 			try {
-				resp1 = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
+				// TODO LUKE CHANGE THE message from KVMEssage to TPCMessage
+				slaveAnswer = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
 			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
-				return;
+				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+					// Connection timed out
+					// Move on to next slaveServer
+				} else {
+					e.printStackTrace();
+					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					return;
+				}
 			}
-			if (!"resp".equals(resp1.getMessage())){
+			if (!"resp".equals(slaveAnswer.getMessage())){
 				// TODO this should not happen, so crash the server if it does
 				System.exit(1);
 				// temp.readLock().unlock();
 				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+			} else {
+				slaveAnswer.getValue();
+				// TODO return the value to parent thread somehow
+				// wake up the parent
 			}
+			// if it gets here, response was wrong so try second replica
+
+			try {
+				slaveAnswer = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
+			} catch (KVException e) {
+				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+					// Connection timed out
+				} else {
+					e.printStackTrace();
+					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					return;
+				}
+			}
+			if (!"resp".equals(slaveAnswer.getMessage())){
+				// TODO this should not happen, so crash the server if it does
+				System.exit(1);
+				// temp.readLock().unlock();
+				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+			} else {
+				slaveAnswer.getValue();
+				// TODO return the value to parent thread somehow
+				// wake up the parent
+			}
+			// if it gets here both didn't work
+			// TODO
 		}
 	}
 	
@@ -574,80 +654,44 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		if (!"getreq".equals(msg.getMsgType())){
 			// TODO this should not happen, so crash the server if it does
 			System.exit(1);
-			// temp.readLock().unlock();
 			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 		}
-		
+
 		// implement me
-				ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
-				if (accessLock == null) {
-					accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+		ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
+		if (accessLock == null) {
+			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+		}
+		accessLock.readLock().lock();
+		// TODO Try cache
+		V value = masterCache.get((K) KVMessage.decodeObject(msg.getKey()));
+		if (value == null) {
+			try {
+				SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+				SlaveInfo successor = findSuccessor(firstReplica);
+				threadpool.addToQueue(
+						new getRunnable<K,V>(msg, firstReplica, successor));
+				// TODO DOUG sleeping on threads
+				// value somehow gets set to the proper value
+				if (value != null) {
+					masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
+				} else {
+					// ERROR? Or OK to return null when neither slaveServer has it
 				}
-				accessLock.readLock().lock();
-				try {
-					SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
-					SlaveInfo successor = findSuccessor(firstReplica);
-					threadpool.addToQueue(
-							new getRunnable<K,V>(msg, firstReplica));
-					threadpool.addToQueue(
-							new processTPCOpRunnable<K,V>(TPCmess, successor));
-					// TODO DOUG sleeping on threads
-				} catch (InterruptedException e) {
-					//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
-					accessLock.writeLock().unlock();
-					return false;
-				} catch (KVException e){
-					//sendMessage(client, e.getMsg());
-					accessLock.writeLock().unlock();
-					return false;
-				}
-
-				// TODO SOLOMON Update cache
+			} catch (InterruptedException e) {
+				//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
 				accessLock.writeLock().unlock();
-				return true;
-
-		// TODO: SOLOMON try cache
-
-		// TODO: see comment above for operation workflow (try get from first/primary replica, if...)
-		
-
-		// find first replica
-		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
-
-		// send/receive request to first slave
-		KVMessage resp1 = sendRecieveKV(msg, firstReplica.hostName, firstReplica.port);
-		if (!"resp".equals(resp1.getMessage())){
-			// TODO this should not happen, so crash the server if it does
-			System.exit(1);
-			// temp.readLock().unlock();
-			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
-		}
-
-		//TODO check if this is correct
-		if (resp1.getValue() == null){ // First replica failed
-			// try second replica
-			SlaveInfo secondReplica = findSuccessor(firstReplica);
-
-			// send/receive request to first slave
-			KVMessage resp2 = sendRecieveKV(msg, secondReplica.hostName, secondReplica.port);
-			if (!"resp".equals(resp2.getMessage())) throw new KVException(new KVMessage("handleGet received a crappy response message"));
-
-			if (resp2.getValue() == null){ // Second replica also failed
-				temp.readLock().unlock();
-				throw new KVException(new KVMessage("@"+firstReplica.slaveID+"=>"+resp1.getMessage()+"\n"+"@"+secondReplica.slaveID+"=>"+resp2.getMessage()));
-			} else{
-				// First replica failed, second replica succeeded
-				temp.readLock().unlock();
-				return (V) KVMessage.decodeObject(resp2.getValue());
+				return null;
+			} catch (KVException e){
+				//sendMessage(client, e.getMsg());
+				accessLock.writeLock().unlock();
+				return null;
 			}
-		} else{
-			// first replica succeeded
-			temp.readLock().unlock();
-			return (V) KVMessage.decodeObject(resp1.getValue());
 		}
-	}
-	public static void sendMessage(Socket client, KVMessage message){
-		sendRecieveKV(KVMessage InputMessage, String server, int port);
+
+		accessLock.writeLock().unlock();
+		return value;
+
 	}
 	
 	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {

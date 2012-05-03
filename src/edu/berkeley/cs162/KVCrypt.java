@@ -41,11 +41,15 @@ public class KVCrypt {
     private static SecretKey key = null;
     public static String keyStr = null;
     private static Cipher cipher = null;
+    private static Cipher decipher = null;
 
     public void setUp() throws Exception {
     	// implement me
-    	cipher = Cipher.getInstance(algorithm);
+    	cipher.init(Cipher.ENCRYPT_MODE, key);
+    	decipher.init(Cipher.DECRYPT_MODE, key);
     }
+    
+  
 
     public void setKey(SecretKey keyPar) throws Exception {
     	key = keyPar;
@@ -53,21 +57,25 @@ public class KVCrypt {
 
     public void setCipher() throws Exception {
     	cipher = Cipher.getInstance(algorithm);
+    	decipher = Cipher.getInstance(algorithm);
     }
+  
 
     public byte[] encrypt(String input)
         throws InvalidKeyException, 
                BadPaddingException,
                IllegalBlockSizeException {
-    	// implement me
-    	return null;
+    	
+    	return cipher.doFinal(input.getBytes());
+    
     }
+    
 
     public String decrypt(byte[] encryptionBytes)
         throws InvalidKeyException, 
                BadPaddingException,
                IllegalBlockSizeException {
-    	// implement me
-    	return null;
+    	
+    	return new String(decipher.doFinal(encryptionBytes));
       }
 }
