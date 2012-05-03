@@ -164,7 +164,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 					throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
 				}
 			}
-			if (msg.getMessage().equals("delreq")) {
+			else if (msg.getMessage().equals("delreq")) {
 				if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
 					if (nextMsg.getMsgType().equals("commit")) {
 						try {

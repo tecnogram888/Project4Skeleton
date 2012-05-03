@@ -27,7 +27,7 @@ public class TPCLogTest {
 		assertTrue(list.get(1).equals(commitPut1));
 		
 		//test del request & commit
-		TPCMessage del1 = new TPCMessage("read", "key2", "delreq", "2");
+		TPCMessage del1 = new TPCMessage("ready", "key2", "delreq", "2");
 		log.appendAndFlush(del1);
 		assertTrue(list.size() == 3);
 		assertTrue(list.get(2).equals(del1));
@@ -47,7 +47,7 @@ public class TPCLogTest {
 		assertTrue(list.get(5).equals(abortPut2));
 		
 		//test del request & abort
-		TPCMessage del2 = new TPCMessage("read", "key4", "delreq", "4");
+		TPCMessage del2 = new TPCMessage("ready", "key4", "delreq", "4");
 		log.appendAndFlush(del2);
 		assertTrue(list.size() == 7);
 		assertTrue(list.get(6).equals(del2));
