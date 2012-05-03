@@ -95,7 +95,6 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 	public void handle(Socket client) throws IOException {
 
 		InputStream in = client.getInputStream();
-		//TODO where do we close in?
 		KVMessage mess = null;
 
 		try {
@@ -118,9 +117,9 @@ public class TPCClientHandler<K extends Serializable, V extends Serializable> im
 class processMessageRunnable<K extends Serializable, V extends Serializable> implements Runnable {
 	KVMessage mess;
 	Socket client;
-	TPCMaster tpcMaster;
+	TPCMaster<K,V> tpcMaster;
 
-	public processMessageRunnable(KVMessage mess, Socket client, TPCMaster master){
+	public processMessageRunnable(KVMessage mess, Socket client, TPCMaster<K,V> master){
 		this.mess = mess;
 		this.client = client;
 		this.tpcMaster = master;
@@ -130,7 +129,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 		if ("getreq".equals(mess.getMsgType())) {	
 			V value = null;
 			try {
-				value = (V) tpcMaster.handleGet(mess);
+				value = tpcMaster.handleGet(mess);
 			} catch (KVException e) {
 				TPCClientHandler.sendMessage(client, e.getMsg());
 				return;
