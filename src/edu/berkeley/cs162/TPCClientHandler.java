@@ -167,7 +167,6 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				e.printStackTrace();
 			}
 			
-			//TODO haven't done delreq yet
 		} else if ("delreq".equals(mess.getMsgType())) {
 			// get the TPC Op ID
 			String TPCOpId = "TODO";
