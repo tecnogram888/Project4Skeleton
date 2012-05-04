@@ -63,7 +63,7 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		this.threadpool = new ThreadPool(connections);	
 		this.tpcMaster = master;
 	}
-	
+
 	public KVClientHandler(KeyServer<K, V> keyserver, TPCMaster<K, V> tpcMaster) {
 		initialize(1, tpcMaster);
 	}
@@ -71,10 +71,10 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 	public KVClientHandler(KeyServer<K, V> keyserver, int connections, TPCMaster<K, V> tpcMaster) {
 		initialize(connections, tpcMaster);
 	}
-	
-	
 
-	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
+
+
+	/*	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
 	public static void sendMessage(Socket client, KVMessage message){
 		PrintWriter out = null;
 		try {
@@ -95,7 +95,7 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 			e.printStackTrace();
 		}
 		out.close();
-	}
+	}*/
 
 	/* (non-Javadoc)
 	 * @see edu.berkeley.cs162.NetworkHandler#handle(java.net.Socket)
@@ -104,20 +104,18 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 	@Override
 	public void handle(Socket client) throws IOException {
 
-		InputStream in = client.getInputStream();
 		KVMessage mess = null;
-
 		try {
-			mess = new KVMessage(in);
+			mess = KVMessage.receiveMessage(client);
 		} catch (KVException e) {
-			KVClientHandler.sendMessage(client, e.getMsg());
+			KVMessage.sendMessage(client, e.getMsg());
 			return;
 		}
 
 		try {
 			threadpool.addToQueue(new processMessageRunnable<K,V>(mess, client, tpcMaster));
 		} catch (InterruptedException e) {
-			// TODO ERROR MESSAGE: sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
+			KVMessage.sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
 			return;
 		}
 	}
@@ -141,53 +139,74 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			try {
 				value = tpcMaster.handleGet(mess);
 			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
+				KVMessage.sendMessage(client, e.getMsg());
+				try {
+					client.close();
+				} catch (IOException e2) {
+					// These ones don't send errors, this is a server error
+					e2.printStackTrace();
+				}
 				return;
 			}
+
 			KVMessage message = null;
+
 			try {
 				message = new KVMessage("resp", mess.getKey(), KVMessage.encodeObject(value));
 			} catch (KVException e){
-				KVClientHandler.sendMessage(client, e.getMsg());
+				KVMessage.sendMessage(client, e.getMsg());
+				try {
+					client.close();
+				} catch (IOException e2) {
+					// These ones don't send errors, this is a server error
+					e2.printStackTrace();
+				}
 				return;
 			}
-			KVClientHandler.sendMessage(client, message);
+
+			KVMessage.sendMessage(client, message);
+
+			// client will be closed at the end
+
+		} else if ("getEnKey".equals(mess.getMsgType())){
+			KVMessage message = null;
 			try {
-				client.close();
-			} catch (IOException e) {
-				// These ones don't send errors, this is a server error
+				message = new KVMessage(KVMessage.encodeObject(tpcMaster.getMasterKey()));
+			} catch (KVException e) {
 				e.printStackTrace();
 			}
-		} else if ("getEnKey".equals(mess.getMsgType())){
-			KVMessage message = new KVMessage("the key string");
-			KVClientHandler.sendMessage(client, message);	
-		
+			KVMessage.sendMessage(client, message);	
+
+			// client will be closed at the end
+
+
 		} else if ("putreq".equals(mess.getMsgType())) {
+			// TODO DOUG ARE WE IMPLEMENTING THE STATUS FIELD?
 			boolean status = false;
 			try {
 				//need separate operations for put and delete
 				status = tpcMaster.performTPCOperation(mess);
 			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
+				KVMessage.sendMessage(client, e.getMsg());
+				try {
+					client.close();
+				} catch (IOException e2) {
+					// These ones don't send errors, this is a server error
+					e2.printStackTrace();
+				}
 				return;
 			}
 			KVMessage message = new KVMessage(status, "Success");
-			KVClientHandler.sendMessage(client, message);
-			try {
-				client.close();
-			} catch (IOException e) {
-				// These ones don't send errors, this is a server error
-				e.printStackTrace();
-			}
-			
+			KVMessage.sendMessage(client, message);
+
+			// client will be closed at the end
+
+
 		} else if ("delreq".equals(mess.getMsgType())) {
-			// get the TPC Op ID
-			String TPCOpId = "TODO";
-			TPCMessage TPCmess = new TPCMessage(mess, TPCOpId);	
 			try {
 				tpcMaster.performTPCOperation(mess);
 			} catch (KVException e) {
-				KVClientHandler.sendMessage(client, e.getMsg());
+				KVMessage.sendMessage(client, e.getMsg());
 				try {
 					client.close();
 				} catch (IOException e2) {
@@ -196,15 +215,18 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				return;
 			}
 			KVMessage message = new KVMessage("Success");
-			KVClientHandler.sendMessage(client, message);
-			try {
-				client.close();
-			} catch (IOException e) {
-				// These ones don't  errors, this is a server error
-				e.printStackTrace();
-			}
+			KVMessage.sendMessage(client, message);
+
+			// client will be closed at the end
+
 		} else {
 			//TODO throw Exception
+		}
+		try {
+			client.close();
+		} catch (IOException e) {
+			// These ones don't send errors, this is a server error
+			e.printStackTrace();
 		}
 		/*
 		KVMessage message = null;
