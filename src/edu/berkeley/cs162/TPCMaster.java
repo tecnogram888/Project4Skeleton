@@ -46,6 +46,10 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.DESedeKeySpec;
+
 public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 	/**
@@ -233,6 +237,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return port;
 		}
 	}
+	
+	//
+	DESedeKeySpec keySpec = null;
+	SecretKey masterKey = null;
 
 	// Timeout value used during 2PC operations
 	private static final int TIMEOUT_MILLISECONDS = 5000;
@@ -284,6 +292,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
+		
+		keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes());//In the real version, use the system name?
+		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
+		masterKey = kf.generateSecret(keySpec);
 	
 	}
 

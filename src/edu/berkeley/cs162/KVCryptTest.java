@@ -47,6 +47,7 @@ public class KVCryptTest {
 	    try {
 			String test2 = new String(cryptor.encrypt(test1));
 			String test3 = cryptor.decrypt(test2.getBytes());
+			System.out.println(test1 + " " + test3);
 			assertEquals(test1, test3);
 		} catch (Exception e) {
 			e.printStackTrace();

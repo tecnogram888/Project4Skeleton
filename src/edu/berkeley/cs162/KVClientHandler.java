@@ -160,8 +160,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			}
 		} else if ("getEnKey".equals(mess.getMsgType())){
 			KVMessage message = new KVMessage("the key string");
-			KVClientHandler.sendMessage(client, message);
-			
+			KVClientHandler.sendMessage(client, message);	
 		
 		} else if ("putreq".equals(mess.getMsgType())) {
 			boolean status = false;
