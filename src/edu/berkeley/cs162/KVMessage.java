@@ -397,8 +397,6 @@ public class KVMessage{
 			in = connection.getInputStream();
 			rtn = new KVMessage(in);
 			in.close();
-		} catch (SocketTimeoutException e){
-			throw e;
 		} catch (IOException e) {
 			// should NOT throw an exception here
 			e.printStackTrace();
