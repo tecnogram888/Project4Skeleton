@@ -38,7 +38,9 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
+import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.net.Socket;
 
 import org.w3c.dom.*;
 
@@ -350,4 +352,52 @@ public class KVMessage{
 		return obj;
 	}
 	
+	/** utility function that sends a KVMessage across a socket
+	 * @param socket
+	 * @param message
+	 */
+	public static void sendMessage(Socket connection, KVMessage message){
+		String xmlFile = null;
+		try {
+			xmlFile = message.toXML();
+		} catch (KVException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
+		}
+		PrintWriter out = null;
+		try {
+			out = new PrintWriter(connection.getOutputStream(),true);
+		} catch (IOException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
+		}
+		
+		out.println(xmlFile);
+		
+		try {
+			connection.shutdownOutput();
+		} catch (IOException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
+		}
+		out.close();
+	}
+	
+	/** utility function that receives a KVMessage across a socket
+	 * @param socket
+	 */
+	public static KVMessage receiveMessage(Socket connection) throws KVException {
+		InputStream in = null;
+		KVMessage rtn = null;
+		
+		try {
+			in = connection.getInputStream();
+			rtn = new KVMessage(in);
+			in.close();
+		} catch (IOException e) {
+			// should NOT throw an exception here
+			e.printStackTrace();
+		}
+		return rtn;
+	}
 }

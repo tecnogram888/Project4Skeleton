@@ -468,9 +468,8 @@ public class TPCMessage extends KVMessage implements Serializable {
 		out.close();
 	}
 	
-	/** utility function that sends a TPCMessage across a socket
+	/** utility function that receives a TPCMessage across a socket
 	 * @param socket
-	 * @param message
 	 */
 	public static TPCMessage receiveMessage(Socket connection){
 		InputStream in = null;

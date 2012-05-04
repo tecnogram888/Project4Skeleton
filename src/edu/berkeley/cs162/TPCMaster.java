@@ -126,47 +126,47 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				// TODO How to handle this error?
 				e.printStackTrace();
 			}
-//			PrintWriter out = null;
-//			// TODO in is not used...
-//			InputStream in = null;
-//			SlaveInfo newSlave = null;
-//			TPCMessage registration = null;
-//
-//			// read registration message from SlaveServer
-//			try {
-//				registration = new TPCMessage(client.getInputStream());
-//				newSlave = new SlaveInfo(registration.getMessage());
-//			} catch (KVException e) {
-//				System.err.println("error reading registration message");
-//			}
-//
-//			addToConsistentHash(newSlave);
-//			synchronized(consistentHash){
-//			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
-//				consistentHash.notify();
-//			}
-//
-//			try {
-//				out = new PrintWriter(client.getOutputStream(), true);
-//			} catch (IOException e) {
-//				System.err.println("could not get slave's outputstream");
-//			}
-//			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
-//			String xmlFile = null;
-//			try {
-//				xmlFile = msg.toXML();
-//			} catch (KVException e) {
-//				System.err.println("could not convert TPCMessage to XML");
-//			}
-//			out.println(xmlFile);
-//			try {
-//				client.shutdownOutput();
-//				// added by luke
-//				client.close();
-//				out.close();
-//			} catch (IOException e) {
-//				System.err.println("could not shutdown client ouptut");
-//			}
+			//			PrintWriter out = null;
+			//			// TODO in is not used...
+			//			InputStream in = null;
+			//			SlaveInfo newSlave = null;
+			//			TPCMessage registration = null;
+			//
+			//			// read registration message from SlaveServer
+			//			try {
+			//				registration = new TPCMessage(client.getInputStream());
+			//				newSlave = new SlaveInfo(registration.getMessage());
+			//			} catch (KVException e) {
+			//				System.err.println("error reading registration message");
+			//			}
+			//
+			//			addToConsistentHash(newSlave);
+			//			synchronized(consistentHash){
+			//			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
+			//				consistentHash.notify();
+			//			}
+			//
+			//			try {
+			//				out = new PrintWriter(client.getOutputStream(), true);
+			//			} catch (IOException e) {
+			//				System.err.println("could not get slave's outputstream");
+			//			}
+			//			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
+			//			String xmlFile = null;
+			//			try {
+			//				xmlFile = msg.toXML();
+			//			} catch (KVException e) {
+			//				System.err.println("could not convert TPCMessage to XML");
+			//			}
+			//			out.println(xmlFile);
+			//			try {
+			//				client.shutdownOutput();
+			//				// added by luke
+			//				client.close();
+			//				out.close();
+			//			} catch (IOException e) {
+			//				System.err.println("could not shutdown client ouptut");
+			//			}
 		}
 	}
 
@@ -235,7 +235,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return port;
 		}
 	}
-	
+
 	//
 	DESedeKeySpec keySpec = null;
 	SecretKey masterKey = null;
@@ -290,19 +290,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler(1));
-		
+
 		// delayed start ThreadPool
 		threadpool = new ThreadPool(10, false); //TODO: how many threads?
-		
+
 		String hostname = InetAddress.getLocalHost().getHostName();
 		while(hostname.length()<20)
 			hostname += hostname;
 		keySpec = new DESedeKeySpec(hostname.getBytes()); //In the real version, use the system name?
 		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
 		masterKey = kf.generateSecret(keySpec);
-	
+
 	}
-	
+
 	public SecretKey getMasterKey() {
 		return masterKey;
 	}
@@ -315,33 +315,33 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 */
 	private String getNextTpcOpId() {
 		tpcOpId++;
-		return tpcOpId.toString();		
+		return tpcOpId.toString();
 	}
 
 	/**
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-			// create a runnable and thread for regServer
-			class regServerRunnable implements Runnable {
-				
-				@Override 
-				public void run() {
-					try {
-						regServer.connect();
-						regServer.run();
-						} catch (IOException e) {
-							e.printStackTrace();
-							}
-					}
-				}
-			
-			Thread regServerThread = new Thread(new regServerRunnable());
-			regServerThread.start();
-			
-			
+		// create a runnable and thread for regServer
+		class regServerRunnable implements Runnable {
 
-		
+			@Override 
+			public void run() {
+				try {
+					regServer.connect();
+					regServer.run();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+		Thread regServerThread = new Thread(new regServerRunnable());
+		regServerThread.start();
+
+
+
+
 	}
 
 	/**
@@ -382,7 +382,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @param newSlave
 	 */
 	public synchronized void addToConsistentHash(SlaveInfo newSlave) {
-		
+
 		Long x = newSlave.getSlaveID();
 		consistantHashLock.writeLock().lock();
 		consistentHash.put(x, newSlave);
@@ -434,7 +434,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		TPCMessage message;
 		Socket client;
 		SlaveInfo slaveServerInfo;
-		
+
 		Boolean b1, b2;
 
 		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo, Boolean _b1, Boolean _b2){
@@ -544,7 +544,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					b1 = true;//Finished Abort section
 					otherThreadDone.notifyAll();
 					return;
-					
+
 				case COMMIT:
 					b1 = false;//Start of section
 					try {
@@ -567,7 +567,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					b1 = true;
 					otherThreadDone.notifyAll();
 					return;
-					
+
 				default: 
 					return;
 				}
@@ -576,11 +576,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 
 	}
-	
+
 	public boolean performTPCOperation(KVMessage msg, boolean isPutRequest) throws KVException {
 		return performTPCOperation(msg);
 	}
-	
+
 	/**
 	 * Synchronized method to perform 2PC operations one after another
 	 * 
@@ -631,7 +631,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// TODO SOLOMON Update cache
 		// if (put) { cache.put() }
 		// if (del) {cache.del() }
-		
+
 		boolean success = (TPCState == EState.COMMIT);
 		TPCState = EState.NOSTATE;
 		if (success) {
@@ -665,7 +665,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		SlaveInfo successor;
 		V value;
 		boolean finished;
-		
+
 		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor, V value){
 			this.message = msg;
 			this.slaveServer = firstReplica;
@@ -673,7 +673,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			this.value = value;
 			this.finished = false;
 		}
-		
+
 		@Override
 		public void run(){
 			// send/receive request to first slave
@@ -687,7 +687,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Move on to next slaveServer
 				} else {
 					e.printStackTrace();
-					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVMessage.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					this.finished = true;
 					this.notifyAll();
 					return;
@@ -710,7 +710,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				}
 			}
 			// if it gets here, response was wrong so try second replica
-			
+
 			try {
 				slaveAnswer = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
 			} catch (KVException e) {
@@ -718,7 +718,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Connection timed out
 				} else {
 					e.printStackTrace();
-					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVMessage.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					this.finished = true;
 					this.notifyAll();
 					return;
@@ -742,16 +742,16 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 			// if it gets here both didn't work
 		}
-		
+
 		public V getValue() {
 			return this.value;
 		}
-		
+
 		public boolean getFinished() {
 			return this.finished;
 		}
 	}
-	
+
 	public V handleGet(KVMessage msg) throws KVException {
 		if (!"getreq".equals(msg.getMsgType())){
 			// TODO this should not happen, so crash the server if it does
@@ -800,7 +800,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		return value;
 
 	}
-	
+
 	private KVMessage sendRecieveKV(KVMessage InputMessage, String server, int port) throws KVException {
 		String xmlFile = InputMessage.toXML();
 		KVMessage returnMessage;
