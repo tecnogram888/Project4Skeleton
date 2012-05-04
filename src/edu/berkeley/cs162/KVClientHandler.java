@@ -158,6 +158,11 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
 			}
+		} else if ("getEnKey".equals(mess.getMsgType())){
+			KVMessage message = new KVMessage("the key string");
+			KVClientHandler.sendMessage(client, message);
+			
+		
 		} else if ("putreq".equals(mess.getMsgType())) {
 			boolean status = false;
 			try {

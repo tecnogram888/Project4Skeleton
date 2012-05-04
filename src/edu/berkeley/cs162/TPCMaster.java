@@ -284,8 +284,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
-		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
-		//TODO: clientServer needs a NetworkHandler --> new TPCClientHandler
+	
 	}
 
 	/**
@@ -316,33 +315,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							}
 					}
 				}
-			class clientServerRunnable implements Runnable {
-				
-				@Override 
-				public void run() {
-					try {
-						clientServer.connect();
-						clientServer.run();
-						} catch (IOException e) {
-							e.printStackTrace();
-							}
-					}
-				}
+			
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
-			while (consistentHash.size() != listOfSlaves.length) {
-				// TODO sleep clientServer
-				synchronized(consistentHash){
-				try {
-					consistentHash.wait();
-				} catch (InterruptedException e) {
-					// TODO Doug how to handle this issue? In this, just die I think
-					e.printStackTrace();
-				}
-				}
-			}
-			Thread clientServerThread = new Thread(new clientServerRunnable());
-			clientServerThread.start();
 			
 			
 
