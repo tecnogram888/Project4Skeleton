@@ -29,16 +29,9 @@
  */
 package edu.berkeley.cs162;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.ObjectInput;
-import java.io.ObjectInputStream;
-import java.io.PrintWriter;
 import java.io.Serializable;
 import java.net.Socket;
-import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.util.Hashtable;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -46,7 +39,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import javax.xml.bind.DatatypeConverter;
 
 /**
- * Handle 2PC operation requests from the Master/
+ * Implements NetworkHandler to handle 2PC operation requests from the Master/
  * Coordinator Server
  *
  */
@@ -55,15 +48,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private ThreadPool threadpool = null;
 	private TPCLog<K, V> tpcLog = null;
 
+	private boolean ignoreNext = false;
+
 	private Hashtable<K, ReentrantReadWriteLock> accessLocks = 
 			new Hashtable<K, ReentrantReadWriteLock>();
-	private boolean ignoreNext = false;
 	private ReentrantLock transactionLock = new ReentrantLock();
 	private enum EState {
-		NOSTATE, WAIT, ABORT, COMMIT
+		NOSTATE, PUT_WAIT, DEL_WAIT, ABORT, COMMIT
 	}
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
+
 
 	public TPCMasterHandler(KeyServer<K, V> keyserver) {
 		this(keyserver, 1);
@@ -72,6 +67,136 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	public TPCMasterHandler(KeyServer<K, V> keyserver, int connections) {
 		this.keyserver = keyserver;
 		threadpool = new ThreadPool(connections);	
+	}
+
+	@Override
+	public void handle(Socket master) throws IOException {
+
+		//TODO SOLOMON: ARE THERE ANY LOCKS IN HANDLE? I THINK THERE AREN'T, BUT CAN YOU DOUBLE-CHECK?
+
+		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
+
+		if(!inputMessage.getMsgType().equals("getreq")) tpcLog.appendAndFlush(inputMessage);
+
+		switch (TPCState) {
+
+		case NOSTATE:
+			if (inputMessage.getMsgType().equals("getreq")){
+				try {
+					threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(inputMessage.getKey()), keyserver, master, inputMessage.getTpcOpId()));
+				} catch (InterruptedException e) {
+					TPCMessage.sendMessage(master, new TPCMessage(new KVMessage("Unknown Error: Get Request failed -- InterruptedException from the threadpool"), "-1"));
+					break;
+				} catch (KVException e){
+					TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+					break;
+				}
+			} else if (inputMessage.getMsgType().equals("putreq")){
+				try {
+					threadpool.addToQueue(new putRunnable<K,V>(
+							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
+							(V)TPCMessage.decodeObject(inputMessage.getValue()), 
+							keyserver, master, inputMessage.getTpcOpId(), inputMessage));			
+				} catch (InterruptedException e) {
+					// send Abort response
+					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					TPCState = EState.PUT_WAIT;
+					break;
+				} catch (KVException e){
+					// send Abort response
+					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					TPCState = EState.PUT_WAIT;
+					break;
+				}
+			} else if (inputMessage.getMsgType().equals("delreq")){
+				try {
+					threadpool.addToQueue(new delRunnable<K,V>(
+							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
+							keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+				} catch (InterruptedException e) {
+					// send Abort response
+					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					TPCState = EState.DEL_WAIT;
+					break;
+				} catch (KVException e){
+					// send Abort response
+					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					TPCState = EState.DEL_WAIT;
+					break;
+				}
+			} else {
+				// this should not happen.
+				// TOOD DOUBLE-CHECK
+				System.err.println("TPCMasterHandler in NOSTATE, but didn't get a getreq, putreq, or delreq");
+				break;
+			}
+
+		case PUT_WAIT: 
+			// Sanity Check... make sure the message is a commit or abort message
+			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
+				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+			}
+
+			if (inputMessage.getMsgType().equals("commit")){
+				TPCState = EState.COMMIT;
+			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCState = EState.ABORT;
+			}
+			try {
+				threadpool.addToQueue(new putRunnable<K,V>(
+						(K)TPCMessage.decodeObject(inputMessage.getKey()), 
+						(V)TPCMessage.decodeObject(inputMessage.getValue()), 
+						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+			} catch (InterruptedException e) {
+				// TODO figure out what to do here
+				System.err.println("PUT_WAIT had an InterruptedException");
+				return;
+			} catch (KVException e){
+				// TODO figure out what to do here
+				System.err.println("PUT_WAIT had a KVException: " + e.getMsg().getMessage());
+				return;
+			}
+
+		case DEL_WAIT: 
+			// Sanity Check... make sure the message is a commit or abort message
+			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
+				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+			}
+
+			if (inputMessage.getMsgType().equals("commit")){
+				TPCState = EState.COMMIT;
+			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCState = EState.ABORT;
+			}
+			
+			try {
+				threadpool.addToQueue(new delRunnable<K,V>(
+						(K)TPCMessage.decodeObject(inputMessage.getKey()), 
+						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+			} catch (InterruptedException e) {
+				// TODO figure out what to do here
+				System.err.println("DEL_WAIT had an InterruptedException");
+				break;
+			} catch (KVException e){
+				// TODO figure out what to do here
+				System.err.println("DEL_WAIT had a KVException: " + e.getMsg().getMessage());
+				break;
+			}		
+		default:
+			// this should pretty much never happen
+			System.err.println("TPCMasterHandler -- handle somehow got to the default case");
+			break;
+		}
+		try {
+			master.close();
+		} catch (IOException e) {
+			// These ones don't send errors, this is a server error
+			e.printStackTrace();
+		}
 	}
 
 	class getRunnable implements Runnable {
@@ -94,14 +219,18 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				accessLocks.put(key, new ReentrantReadWriteLock());
 			}
 			accessLock.readLock().lock();
+
 			// call get function and send answer to master
 			V value = null;
 			try {
 				value = keyserver.get(key);
 			} catch (KVException e) {
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				accessLock.readLock().unlock();
 				return;
 			}
+
+			// create the response TPCMessage
 			KVMessage KVresponse = null;
 			TPCMessage TPCresponse = null;
 			try {
@@ -109,10 +238,14 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				KVresponse = new KVMessage("resp", KVMessage.encodeObject(key), KVMessage.encodeObject(value));
 				TPCresponse = new TPCMessage(KVresponse, TpcOpID);
 			} catch (KVException e){
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				accessLock.readLock().unlock();
 				return;
 			}
-			TPCMasterHandler.sendTPCMessage(master, TPCresponse);
+
+			// send the TPCMessage to the master
+			TPCMessage.sendMessage(master, TPCresponse);
+			// TODO should I still close it here, I close it in handle()
 			try {
 				master.close();
 			} catch (IOException e) {
@@ -143,65 +276,59 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		@Override
 		public void run() {
 			transactionLock.lock();
-			// try to do op, if can't, send abort, if can, send ready; we assume it always works
-			// write message to TPCLog
-			// send ready message to master
-			// TPCState == WAIT
 
-			// check to see if putreq will send back an ABORT
-			TPCMessage reply = null;
-
-			if (!checkKey(message.getKey())){
-				TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
-				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-			} else if (!checkValue(message.getValue())){
-				TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-			} else{
-				TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-				reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
-			}
-
-			// write to log
-			tpcLog.appendAndFlush(reply);
-
-			if (reply.getMsgType().equals("commit")){
-				TPCState = EState.COMMIT;
-			} else if (reply.getMsgType().equals("abort")){
-				TPCState = EState.ABORT;
-			} else{
-				//  TODO throw exception
-			}
 			switch (TPCState) {
-			/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
-				  	case WAIT: 
-					// listen for abort or commit
-					// write message to TPC Log
-					// go into proper state*/
-			case ABORT:
-				// abort
-				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMasterHandler.sendTPCMessage(master, ackMessage);
+			case NOSTATE: 
+				// check to see if putreq will send back an Abort response or a Ready response
+				if (!checkKey(message.getKey())){
+					// send Abort response
+					TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMessage);
+					TPCState = EState.PUT_WAIT;
+					break;
+				} else if (!checkValue(message.getValue())){
+					// send Abort response
+					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMessage);
+					TPCState = EState.PUT_WAIT;
+					break;
+				} else{
+					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
+					TPCMessage.sendMessage(master, readyMessage);					
+					TPCState = EState.PUT_WAIT;
+					break;
+				}
 			case COMMIT:
 				try {
 					keyserver.put(key, value);
 				} catch (KVException e) {
-					TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
-					return;
+					System.err.println("put COMMIT failed");
+					break;
 				}
-				TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
-				TPCMasterHandler.sendTPCMessage(master, ackmessage);					
+				// send acknowledgment
+				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMessage.sendMessage(master, ackMessage);
+				TPCState = EState.NOSTATE;
+				break;	
+			case ABORT:
+				// send acknowledgment
+				ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMessage.sendMessage(master, ackMessage);
+				TPCState = EState.NOSTATE;
+				break;
 			default:
-				// TODO fail/error
+				// this should pretty much should NEVER happen
+				System.err.println("TPCMasterHandler -- putRunnable somehow got to the default case");
+				break;
 			}
-			TPCState = EState.NOSTATE;
-			transactionLock.unlock();
+			// TODO should I still close it here, I close it in handle()
 			try {
 				master.close();
 			} catch (IOException e) {
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
 			}
+			transactionLock.unlock();
 		}
 	}
 
@@ -220,134 +347,76 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			this.TpcOpID = TpcOpID;
 			this.message = message;
 		}
+
 		@Override
 		public void run() {
 			transactionLock.lock();
-			// try to do op, if can't, send abort, if can, send ready; we assume it always works
-			// write message to TPCLog
-			// send ready message to master
-			// TPCState == WAIT
 
-			// check to see if putreq will send back an ABORT
-			TPCMessage reply = null;
-
-			if (!checkValue(message.getValue())){
-				TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-			} else{
-				TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-				reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
-			}
-			
-			// write to log
-			tpcLog.appendAndFlush(reply);
-			
-			if ("commit".equals(reply.getMsgType())){
-				TPCState = EState.COMMIT;
-			} else if ("abort".equals(reply.getMsgType())){
-				TPCState = EState.ABORT;
-			} else{
-				//  TODO throw exception
-			}
 			switch (TPCState) {
-			/*	DON'T NEED WAIT ANYMORE SINCE WE'RE DIONG SENDRECEIVE
-				  	case WAIT: 
-					// listen for abort or commit
-					// write message to TPC Log
-					// go into proper state*/
-			case ABORT:
-				// abort
-				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMasterHandler.sendTPCMessage(master, ackMessage);
+
+			case NOSTATE: 
+				// check to see if delreq will send back an Abort response or a Ready response
+				if (!checkKey(message.getKey())){
+					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMessage);
+					TPCState = EState.DEL_WAIT;
+					break;
+				} else {
+
+					// test to see if key is actually inside the server
+					try {
+						keyserver.get(key);
+					} catch (KVException e) {
+						// this means that key is not inside of keyserver
+						TPCMessage abortMessage = new TPCMessage("abort", "Key doesn't exist", message.getTpcOpId(), false);
+						TPCMessage.sendMessage(master, abortMessage);
+						TPCState = EState.DEL_WAIT;
+						break;
+					}
+
+					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
+					TPCMessage.sendMessage(master, readyMessage);
+					TPCState = EState.DEL_WAIT;
+					break;
+				}
+
 			case COMMIT:
+				/* Correctness Constraints:
+				 * key is definitely in keyserver
+				 * 
+				 */
 				try {
 					keyserver.del(key);
 				} catch (KVException e) {
-					TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(),"-1"));
-					return;
+					// this breaks the correctness constraint
+					System.err.println("Delete COMMIT failed when it wasn't supposed to");
+					break;
 				}
-				TPCMessage ackmessage = new TPCMessage("ack", TpcOpID);
-				TPCMasterHandler.sendTPCMessage(master, ackmessage);					
+				// send acknowledgment
+				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMessage.sendMessage(master, ackMessage);
+				TPCState = EState.NOSTATE;
+				break;
+			case ABORT:
+				// send acknowledgment
+				ackMessage = new TPCMessage("ack", TpcOpID);
+				TPCMessage.sendMessage(master, ackMessage);
+				TPCState = EState.NOSTATE;
+				break;
 			default:
-				// TODO fail/error
+				// this should pretty much should NEVER happen
+				System.err.println("TPCMasterHandler -- delRunnable somehow got to the default case");
+				break;
 			}
-			TPCState = EState.NOSTATE;
-			transactionLock.unlock();
+
 			try {
+				// TODO should I still close it here, I close it in handle()
 				master.close();
 			} catch (IOException e) {
 				// These ones don't send errors, this is a server error
 				e.printStackTrace();
 			}
-		}
-	}
-
-	@Override
-	public void handle(Socket master) throws IOException {
-
-		InputStream in = master.getInputStream();
-		TPCMessage message = null;
-
-		try {
-			message = new TPCMessage(in);
-		} catch (KVException e) {
-			KVClientHandler.sendMessage(master, e.getMsg());
-			return;
-		}
-
-		if (!"getreq".equals(message.getMsgType())){
-			// if its NOT a GET request, then add to tpcLog
-			tpcLog.appendAndFlush(message);
-		}
-
-		if (message.getMsgType().equals("getreq")) {
-			if(!checkValue(message.getValue())){
-				// TODO throw exception or send error message or DO SOMETHING
-			}
-			try {
-				threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(message.getKey()), keyserver, master, message.getTpcOpId()));
-			} catch (InterruptedException e) {
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(new KVMessage("Unknown Error: InterruptedException from the threadpool"), "-1"));	
-			} catch (KVException e){
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
-				return;
-			}
-		} else if (message.getMsgType().equals("putreq")){
-			try {
-				threadpool.addToQueue(new putRunnable<K,V>(
-						(K)TPCMessage.decodeObject(message.getKey()), 
-						(V)TPCMessage.decodeObject(message.getValue()), 
-						keyserver, master,message.getTpcOpId(), message));			
-			} catch (InterruptedException e) {
-				// send abort, receive a Global Abort
-				sendReceiveAbort("Unknown Error: InterruptedException from the threadpool", message.getTpcOpId(), master);
-				master.close();
-				return;
-			} catch (KVException e){
-				// send abort, receive a Global Abort
-				sendReceiveAbort(e.getMsg().getMessage(), message.getTpcOpId(), master);
-				master.close();
-				return;
-			}
-		} else if (message.getMsgType().equals("delreq")){
-			try {
-				threadpool.addToQueue(new delRunnable<K,V>(
-						(K)TPCMessage.decodeObject(message.getKey()), 
-						keyserver, master,message.getTpcOpId(), message));
-			} catch (InterruptedException e) {
-				// send abort, receive a Global Abort
-				sendReceiveAbort("Unknown Error: InterruptedException from the threadpool", message.getTpcOpId(), master);
-				master.close();
-				return;
-			} catch (KVException e){
-				sendReceiveAbort(e.getMsg().getMessage(), message.getTpcOpId(), master);
-				master.close();
-				return;
-			}
-		} else{
-			sendReceiveAbort("Unknown Error: Bad message sent to TPCMasterHandler", message.getTpcOpId(), master);
-			master.close();
-			return;
+			transactionLock.unlock();
 		}
 	}
 
@@ -359,69 +428,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		this.tpcLog  = tpcLog;
 	}
 
-	//Utility method, sends the TPCMessage to the master Socket and closes output on the socket
-	public static void sendTPCMessage(Socket master, TPCMessage message){
-
-		PrintWriter out = null;
-		try {
-			out = new PrintWriter(master.getOutputStream(), true);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		try {
-			out.println(message.toXML());
-		} catch (KVException e) {
-			// should NOT ever throw exception here
-			e.printStackTrace();
-		}
-		try {
-			master.shutdownOutput();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		out.close();
-	}
-
-	//Utility method, sends the TPCMessage to the master Socket and receives a response
-	private static TPCMessage sendRecieveTPCMessage(Socket connection, TPCMessage message) {
-		String xmlFile = null;
-		try {
-			xmlFile = message.toXML();
-		} catch (KVException e2) {
-			e2.printStackTrace();
-		}
-		PrintWriter out = null;
-		InputStream in = null;
-		try {
-			connection.setSoTimeout(15000);
-		} catch (SocketException e1) {
-			e1.printStackTrace();
-		}
-		try {
-			out = new PrintWriter(connection.getOutputStream(),true);
-			out.println(xmlFile);
-			connection.shutdownOutput();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		try {
-			in = connection.getInputStream();
-			message = new TPCMessage(in);
-			in.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (KVException e1) {
-			e1.printStackTrace();
-		}
-		out.close();
-		try {
-			connection.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		return message;
-	}
-
 	private boolean checkKey(String key){	
 		byte[] decoded = DatatypeConverter.parseBase64Binary(key);
 		// make sure the length of the byte array is less than 128KB
@@ -431,6 +437,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			return true;
 		}
 	}
+
 	private boolean checkValue(String value){	
 		byte[] decoded = DatatypeConverter.parseBase64Binary(value);
 		// make sure the length of the byte array is less than 128KB
@@ -441,18 +448,5 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		}
 	}
 
-	private void sendReceiveAbort(String errorMessage, String tpcOpID, Socket master){
-		// send abort, receive a Global Abort
-		TPCMessage reply;
-		TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", tpcOpID, false);
-		reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-
-		// write to log
-		tpcLog.appendAndFlush(reply);
-
-		// send ack
-		TPCMessage ackmessage = new TPCMessage("ack", reply.getTpcOpId());
-		TPCMasterHandler.sendTPCMessage(master, ackmessage);	
-	}
 
 }

@@ -141,7 +141,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 	}
 
 	/**
-	 *  for 2PC Del Requests and 2PC Abort messages
+	 *  for 2PC Del Requests and 2PC Abort response
 	 * @param String msgType
 	 * @param String keyORmessage
 	 * @param String tpcOpId
@@ -162,7 +162,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 	}
 
 	/**
-	 *  2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, 2PC IgnoreNext
+	 *  2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, 2PC IgnoreNext, 2PC Abort Decision,
 	 *	Register, Registration ACK, 
 	 *	Error Message, Server response, 
 	 *	2PCLog abort, 2PCLog commit, and KeyRequest
@@ -189,13 +189,13 @@ public class TPCMessage extends KVMessage implements Serializable {
 
 	}
 
-	public TPCMessage(TPCMessage kvm) {
+	/*public TPCMessage(TPCMessage kvm) {
 		this.msgType = kvm.msgType;
 		this.key = kvm.key;
 		this.value = kvm.value;
 		this.message = kvm.message;
 		this.tpcOpId = kvm.tpcOpId;
-	}
+	}*/
 
 	public String getMsgType(){
 		return msgType;
@@ -437,37 +437,57 @@ public class TPCMessage extends KVMessage implements Serializable {
 		return obj;
 	}
 
-	/** utility function that sends a TPC message
+	/** utility function that sends a TPCMessage across a socket
 	 * @param socket
 	 * @param message
 	 */
-	//TODO: sendmessage
-	public static TPCMessage sendTPCMessage(Socket socket, TPCMessage message) throws KVException {
-		TPCMessage ACK = null;
-		String xmlFile = message.toXML();
-		PrintWriter out = null;
-		InputStream in = null;
+	public static void sendMessage(Socket connection, TPCMessage message){
+		String xmlFile = null;
 		try {
-			out = new PrintWriter(socket.getOutputStream(),true);
-			out.println(xmlFile);
-			socket.shutdownOutput();
-		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not send data"));
+			xmlFile = message.toXML();
+		} catch (KVException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
 		}
+		PrintWriter out = null;
 		try {
-			in = socket.getInputStream();
-			ACK = new TPCMessage(in);
-			in.close();
+			out = new PrintWriter(connection.getOutputStream(),true);
 		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+			// should NOT ever throw exception here
+			e.printStackTrace();
+		}
+		
+		out.println(xmlFile);
+		
+		try {
+			connection.shutdownOutput();
+		} catch (IOException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
 		}
 		out.close();
+	}
+	
+	/** utility function that sends a TPCMessage across a socket
+	 * @param socket
+	 * @param message
+	 */
+	public static TPCMessage receiveMessage(Socket connection){
+		InputStream in = null;
+		TPCMessage rtn = null;
+		
 		try {
-			socket.close();
+			in = connection.getInputStream();
+			rtn = new TPCMessage(in);
+			in.close();
 		} catch (IOException e) {
-			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+			// should NOT ever throw exception here
+			e.printStackTrace();
+		} catch (KVException e) {
+			// should NOT ever throw exception here
+			e.printStackTrace();
 		}
-		return ACK;
+		return rtn;
 	}
 	
 	boolean equals(TPCMessage message){

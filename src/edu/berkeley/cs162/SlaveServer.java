@@ -93,7 +93,7 @@ public class SlaveServer {
 		// Register with the Master
 		// implement me
 		Socket register = null;
-		TPCMessage ACK = null;
+		TPCMessage regAck = null;
 		try {
 			register = new Socket(masterHostName, masterPort);
 		} catch(UnknownHostException e) {
@@ -103,17 +103,18 @@ public class SlaveServer {
 		}
 		
 		try {
-			register.setSoTimeout(30);
+			register.setSoTimeout(5000);
 		} catch (SocketException e) {
 			System.err.println("could not set socket timeout");
 		}
 		
 		
-		ACK = TPCMessage.sendTPCMessage(register, new TPCMessage(slaveID+"@"+masterHostName+":"+masterPort));
-		if (ACK.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort) {
+		regAck = new TPCMessage(slaveID+"@"+masterHostName+":"+masterPort);
+		TPCMessage.sendMessage(register, regAck);
+		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort) {
 			System.err.println("could not successfully register");
 		} else {
-			// sys.log -> successfully registered?
+			// TODO sys.log -> successfully registered?
 		}
 	}
 
