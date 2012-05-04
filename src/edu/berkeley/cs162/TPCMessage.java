@@ -67,7 +67,7 @@ import org.xml.sax.SAXException;
  * for communication between clients and servers. Data is stored in a 
  * marshalled String format in this object...
  */
-public class TPCMessage implements Serializable {
+public class TPCMessage extends KVMessage implements Serializable {
 	private static final long serialVersionUID = 6473128480951955693L;
 
 	private String msgType = null;
