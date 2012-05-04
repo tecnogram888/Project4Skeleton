@@ -466,56 +466,54 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							e.printStackTrace();
 						}
 					}
-						// check to see if response is ready or abort
-						if ("ready".equals(response.getMsgType())){
-							TPCStateLock.lock();
-							if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
+					// check to see if response is ready or abort
+					if ("ready".equals(response.getMsgType())){
+						TPCStateLock.lock();
+						if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
+							b1 = true;
+							otherThreadDone.notifyAll();
+						} else {
+							TPCState = EState.COMMIT;
+							try {
 								b1 = true;
-								otherThreadDone.notifyAll();
-							} else {
-								TPCState = EState.COMMIT;
-								try {
-									b1 = true;
-									while (!(b1 && b2)) otherThreadDone.await();
-									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
-									//otherThreadDone.wait();
-								} catch (InterruptedException e) {
-									//TODO Doug how to handle this error?
-									System.err.println("INIT messed up when trying to wait");
-									e.printStackTrace();
-									System.exit(1);
-								}
+								while (!(b1 && b2)) otherThreadDone.await();
+								TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+							} catch (InterruptedException e) {
+								//TODO Doug how to handle this error?
+								System.err.println("INIT messed up when trying to wait");
+								e.printStackTrace();
+								System.exit(1);
 							}
-							TPCStateLock.unlock();
-						} else if ("abort".equals(response.getMsgType())){
-							TPCStateLock.lock();
-							if (TPCState == EState.INIT){
-								// other thread is has not finished yet
-								TPCState = EState.ABORT;
-								TPCStateLock.unlock();
-								try {
-									b1 = true;
-									while (!(b1 && b2)) otherThreadDone.await();
-									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
-								} catch (InterruptedException e) {
-									//TODO Doug how to handle this error?
-									System.err.println("INIT messed up when trying to wait");
-									e.printStackTrace();
-									System.exit(1);
-								}
-							} else{
-								// if the other thread already finished and is waiting
-								b1 = true;
-								otherThreadDone.notifyAll();
-							}		
-							// check if other guy is sleeping, if so wake him up, if not go to sleep
-							TPCStateLock.unlock();
-						} else{
-							//TODO Doug How to handle this error?
-							System.err.println("Coordinator did not get a ready or abort response");
-							System.exit(1);
 						}
-					
+					} else if ("abort".equals(response.getMsgType())){
+						TPCStateLock.lock();
+						if (TPCState == EState.INIT){
+							// other thread is has not finished yet
+							TPCState = EState.ABORT;
+							TPCStateLock.unlock();
+							try {
+								b1 = true;
+								while (!(b1 && b2)) otherThreadDone.await();
+								TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+							} catch (InterruptedException e) {
+								//TODO Doug how to handle this error?
+								System.err.println("INIT messed up when trying to wait");
+								e.printStackTrace();
+								System.exit(1);
+							}
+						} else{
+							// if the other thread already finished and is waiting
+							b1 = true;
+							otherThreadDone.notifyAll();
+						}		
+						// check if other guy is sleeping, if so wake him up, if not go to sleep
+						TPCStateLock.unlock();
+					} else{
+						//TODO Doug How to handle this error?
+						System.err.println("Coordinator did not get a ready or abort response");
+						System.exit(1);
+					}
+
 					break;
 				case ABORT:
 					b1 = false;//False at start of section
