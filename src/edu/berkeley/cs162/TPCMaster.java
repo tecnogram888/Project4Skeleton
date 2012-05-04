@@ -675,7 +675,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Move on to next slaveServer
 				} else {
 					e.printStackTrace();
-					KVClientHandlerOLD.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					return;
 				}
 			}
@@ -698,7 +698,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Connection timed out
 				} else {
 					e.printStackTrace();
-					KVClientHandlerOLD.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					return;
 				}
 			}

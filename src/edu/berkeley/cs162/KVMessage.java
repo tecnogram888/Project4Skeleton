@@ -67,6 +67,10 @@ public class KVMessage{
 	private String message = null;
 	private boolean isPutResp = false;
 
+	public KVMessage(){
+		//do nothing
+	}
+	
 	public KVMessage(String msgType, String key, String value) {
 		this.msgType = msgType;
 		this.key = key;
