@@ -91,7 +91,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		public void run() {
 			ReentrantReadWriteLock accessLock = accessLocks.get(key);
 			if (accessLock == null) {
-				accessLocks.put((K) key, new ReentrantReadWriteLock());
+				accessLocks.put(key, new ReentrantReadWriteLock());
 			}
 			accessLock.readLock().lock();
 			// call get function and send answer to master
