@@ -12,9 +12,9 @@ public class TPCLogTest {
 	@Test
 	public void testAppendAndFlush() {
 		//set up TPCLog
-		KeyServer<String, String> server = new KeyServer<String, String>(10); 
+		KeyServer<String, String> server = new KeyServer<String, String>(9); 
 		TPCLog<String, String> log = new TPCLog<String, String> ("logPath", server);
-		ArrayList<TPCMessage> list = log.getEntries();
+		ArrayList<KVMessage> list = log.getEntries();
 		
 		//test put request & commit
 		TPCMessage put1 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
@@ -89,7 +89,11 @@ public class TPCLogTest {
 		TPCMessage commitDel1 = new TPCMessage ("commit","4");
 		log.appendAndFlush(commitDel1);
 		
-//		KeyServer<String, String> server2 = new KeyServer<String, String>(10);
+		//adds interrupted operation
+		TPCMessage put3 = new TPCMessage("ready", "key4", "value4", "putreq", "5");
+		log.appendAndFlush(put2);
+		
+		//test rebuilding
 		String logPath = log.logPath;
 		TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server);
 		try {
@@ -98,12 +102,12 @@ public class TPCLogTest {
 			System.out.println("Error rebuilding " + e);
 		}
 		for (int x = 0; x < log.getEntries().size(); x++) {
-			if (!log2.getEntries().get(x).equals(log.getEntries().get(x))) {
-				TPCMessage y1 = log2.getEntries().get(x);
-				TPCMessage y2 = log.getEntries().get(x);
-				assertEquals(y1, y2);
-			}
+			TPCMessage y1 = (TPCMessage) log2.getEntries().get(x);
+			TPCMessage y2 = (TPCMessage) log.getEntries().get(x);
+			assertTrue(y1.equals(y2));
 		}
+
+		
 	}
 
 }

@@ -44,30 +44,30 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	private KeyServer<K, V> keyServer = null;
 
 	// Log entries
-	public ArrayList<TPCMessage> entries = null;
-	
+	private ArrayList<KVMessage> entries = null;
+
 	// Keeps track of the interrupted 2PC operation (There can be at most one, 
 	// i.e., when the last 2PC operation before crashing was in READY state)
 	private KVMessage interruptedTpcOperation = null;
-	
+
 	public TPCLog(String logPath, KeyServer<K, V> keyServer) {
 		this.logPath = logPath;
-		entries = new ArrayList<TPCMessage>();
+		entries = new ArrayList<KVMessage>();
 		this.keyServer = keyServer;
 	}
 
-	public ArrayList<TPCMessage> getEntries() {
+	public ArrayList<KVMessage> getEntries() {
 		return entries;
 	}
 
 	public boolean empty() {
 		return (entries.size() == 0);
 	}
-	
-	public void appendAndFlush(TPCMessage entry) {
+
+	public void appendAndFlush(KVMessage entry) {
 		// implement me
-//		System.out.println("Entries currently has " + entries.size());
-//		System.out.println(entry);
+		//		System.out.println("Entries currently has " + entries.size());
+		//		System.out.println(entry);
 		entries.add(entry);
 		this.flushToDisk();
 	}
@@ -78,16 +78,16 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	@SuppressWarnings("unchecked")
 	public void loadFromDisk() {
 		ObjectInputStream inputStream = null;
-		
+
 		try {
 			inputStream = new ObjectInputStream(new FileInputStream(logPath));			
-			entries = (ArrayList<TPCMessage>) inputStream.readObject();
+			entries = (ArrayList<KVMessage>) inputStream.readObject();
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
 			// If log never existed, there are no entries
 			if (entries == null) {
-				entries = new ArrayList<TPCMessage>();
+				entries = new ArrayList<KVMessage>();
 			}
 
 			try {
@@ -99,13 +99,13 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 			}
 		}
 	}
-	
+
 	/**
 	 * Writes log to persistent storage
 	 */
 	public void flushToDisk() {
 		ObjectOutputStream outputStream = null;
-		
+
 		try {
 			outputStream = new ObjectOutputStream(new FileOutputStream(logPath));
 			outputStream.writeObject(entries);
@@ -122,7 +122,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 			}
 		}
 	}
-	
+
 	/**
 	 * Load log and rebuild by iterating over log entries 
 	 * @throws KVException
@@ -133,65 +133,63 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 		entries = this.getEntries();
 		int x = 0; //just a counter
 		while (x< entries.size()) { //execute each operation in entries
-			TPCMessage msg = entries.get(x);
-			
+			TPCMessage msg = (TPCMessage) entries.get(x);
+
 			//check if there is no following abort / commit tpc message (interrupted) 
-			if (entries.get(x+1) == null) { 
-				if (hasInterruptedTpcOperation()) {
-					TPCMessage interruptedMsg = new TPCMessage (getInterruptedTpcOperation(), msg.getTpcOpId());
-					entries.add(interruptedMsg);
-				} else {
-					throw new KVException (new KVMessage ("Error-- Don't know commit / abort"));
-				}
-			}
-			
-			//execute message in log
-			TPCMessage nextMsg = entries.get(x+1);
-			if (msg.getMessage().equals("putreq")) {
-				if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
-					if (nextMsg.getMsgType().equals("commit")) {
-						try {
-							keyServer.put((K)msg.getKey(), (V)msg.getValue());
-							x+=2;
-						} catch (KVException e) {
-							throw new KVException (new KVMessage ("Error with KV Message put" + e));
+			if (entries.size()-1 == x) {
+				interruptedTpcOperation = entries.get(x); 
+				x++;
+			} else {
+				interruptedTpcOperation = null;
+
+				//execute message in log
+				TPCMessage nextMsg = (TPCMessage) entries.get(x+1);
+				if (msg.getMessage().equals("putreq")) {
+					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
+						if (nextMsg.getMsgType().equals("commit")) {
+							try {
+								keyServer.put((K)msg.getKey(), (V)msg.getValue());
+								x+=2;
+							} catch (KVException e) {
+								throw new KVException (new KVMessage ("Error with KV Message put" + e));
+							}
+						} else if (nextMsg.getMsgType().equals("abort")){
+							x+=2;//do nothing
 						}
-					} else if (nextMsg.getMsgType().equals("abort")){
-						x+=2;//do nothing
+					} else {//interrupted (msg's tpcopid is not same as nextmsg's tpcopid)
+						x++;
+						throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
 					}
-				} else {//interrupted (msg's tpcopid is not same as nextmsg's tpcopid)
-					x++;
-					throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
 				}
-			}
-			else if (msg.getMessage().equals("delreq")) {
-				if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
-					if (nextMsg.getMsgType().equals("commit")) {
-						try {
-							keyServer.del((K)msg.getKey());
-							x+=2;
-						} catch (KVException e) {
-							throw new KVException (new KVMessage ("Error with KV Message del" + e));
+				else if (msg.getMessage().equals("delreq")) {
+					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
+						if (nextMsg.getMsgType().equals("commit")) {
+							try {
+								keyServer.del((K)msg.getKey());
+								x+=2;
+							} catch (KVException e) {
+								throw new KVException (new KVMessage ("Error with KV Message del" + e));
+							}
+						} else if (nextMsg.getMsgType().equals("abort")) {
+							x+=2;//do nothing
 						}
-					} else if (nextMsg.getMsgType().equals("abort")) {
-						x+=2;//do nothing
+					} else {
+						x++;
+						throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
 					}
-				} else {
-					x++;
-					throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
 				}
 			}
 		}
-			
-			/* Notes-- Cases:
-			 * ready for put --> abort
-			 * ready for put --> commit
-			 * ready for put --> interrupted (call get interruptedtpcop)
-			 * ready for del --> abort
-			 * ready for del --> commit
-			 * ready for del --> interrupted (call get intrruptedtpcop)
-			 */
-			
+
+		/* Notes-- Cases:
+		 * ready for put --> abort
+		 * ready for put --> commit
+		 * ready for put --> interrupted (call get interruptedtpcop)
+		 * ready for del --> abort
+		 * ready for del --> commit
+		 * ready for del --> interrupted (call get intrruptedtpcop)
+		 */
+
 		/* Old, Simplified stuff:
 		for (int x = 0; x < entries.size(); x++) {
 			try {
@@ -214,7 +212,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 			}
 		}*/
 	}
-	
+
 	/**
 	 * 
 	 * @return Interrupted 2PC operation, if any 
@@ -224,7 +222,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 		interruptedTpcOperation = null; 
 		return logEntry; 
 	}
-	
+
 	/**
 	 * 
 	 * @return True if TPCLog contains an interrupted 2PC operation
