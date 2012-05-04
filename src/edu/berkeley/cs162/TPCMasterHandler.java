@@ -150,25 +150,27 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 			// check to see if putreq will send back an ABORT
 			TPCMessage reply = null;
-			try{
-				if (!checkKey(message.getKey())){
-					TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
-					TPCMasterHandler.sendTPCMessage(master, abortMessage);
-					reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-				} else if (!checkValue(message.getValue())){
-					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-					reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
-				} else{
-					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
-				}
-			} catch (KVException e){
-				e.printStackTrace();
-				sendTPCMessage(master, new TPCMessage("abort", e.getMsg().getMessage(), TpcOpID, false));
+			
+			if (!checkKey(message.getKey())){
+				TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
+				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
+			} else if (!checkValue(message.getValue())){
+				TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
+				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
+			} else{
+				TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
+				reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
 			}
-			if ("commit".equals(reply.getMsgType())){
+			
+			// write to log
+			tpcLog.appendAndFlush(reply);
+			
+			//This is where Luke left off :(
+			asdfasdf
+			
+			if (reply.getMsgType().equals("commit")){
 				TPCState = EState.COMMIT;
-			} else if ("abort".equals(reply.getMsgType())){
+			} else if (reply.getMsgType().equals("abort")){
 				TPCState = EState.ABORT;
 			} else{
 				//  TODO throw exception
@@ -233,8 +235,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			TPCMessage reply = null;
 			try{
 				if (!checkValue(message.getValue())){
-					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-					reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
+					reply = sendReceiveAbort("Over sized value", message.getTpcOpId(), master);
 				} else{
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
 					reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
@@ -285,9 +286,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 	@Override
 	public void handle(Socket master) throws IOException {
-		// implement me
-		
-		//TODO turn GET into TPCMessage
 
 		InputStream in = master.getInputStream();
 		TPCMessage message = null;
@@ -299,6 +297,11 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			return;
 		}
 
+		if (!"getreq".equals(message.getMsgType())){
+			// if its NOT a GET request, then add to tpcLog
+			tpcLog.appendAndFlush(message);
+		}
+
 		if (message.getMsgType().equals("getreq")) {
 			if(!checkValue(message.getValue())){
 				// TODO throw exception or send error message or DO SOMETHING
@@ -306,7 +309,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			try {
 				threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(message.getKey()), keyserver, master, message.getTpcOpId()));
 			} catch (InterruptedException e) {
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage("resp", "Unknown Error: InterruptedException from the threadpool"));
+				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(new KVMessage("Unknown Error: InterruptedException from the threadpool"), "-1"));	
 			} catch (KVException e){
 				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
 				return;
@@ -316,12 +319,16 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				threadpool.addToQueue(new putRunnable<K,V>(
 						(K)TPCMessage.decodeObject(message.getKey()), 
 						(V)TPCMessage.decodeObject(message.getValue()), 
-						keyserver, master,message.getTpcOpId(), message));
+						keyserver, master,message.getTpcOpId(), message));			
 			} catch (InterruptedException e) {
-				//TODO check if this is right
-				TPCMasterHandler.sendTPCMessage(master,new TPCMessage(new KVMessage("Unknown Error: InterruptedException from the threadpool"), "-1"));
+				// send abort, receive a Global Abort
+				sendReceiveAbort("Unknown Error: InterruptedException from the threadpool", message.getTpcOpId(), master);
+				master.close();
+				return;
 			} catch (KVException e){
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				// send abort, receive a Global Abort
+				sendReceiveAbort(e.getMsg().getMessage(), message.getTpcOpId(), master);
+				master.close();
 				return;
 			}
 		} else if (message.getMsgType().equals("delreq")){
@@ -330,14 +337,19 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						(K)TPCMessage.decodeObject(message.getKey()), 
 						keyserver, master,message.getTpcOpId(), message));
 			} catch (InterruptedException e) {
-				//TODO check if this is right
-				TPCMasterHandler.sendTPCMessage(master,new TPCMessage(new KVMessage("Unknown Error: InterruptedException from the threadpool"), "-1"));
+				// send abort, receive a Global Abort
+				sendReceiveAbort("Unknown Error: InterruptedException from the threadpool", message.getTpcOpId(), master);
+				master.close();
+				return;
 			} catch (KVException e){
-				TPCMasterHandler.sendTPCMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				sendReceiveAbort(e.getMsg().getMessage(), message.getTpcOpId(), master);
+				master.close();
 				return;
 			}
 		} else{
-			// error
+			sendReceiveAbort("Unknown Error: Bad message sent to TPCMasterHandler", message.getTpcOpId(), master);
+			master.close();
+			return;
 		}
 	}
 
@@ -349,13 +361,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		this.tpcLog  = tpcLog;
 	}
 
-	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
+	//Utility method, sends the TPCMessage to the master Socket and closes output on the socket
 	public static void sendTPCMessage(Socket master, TPCMessage message){
+
 		PrintWriter out = null;
 		try {
 			out = new PrintWriter(master.getOutputStream(), true);
 		} catch (IOException e) {
-			// Auto-generated catch block
 			e.printStackTrace();
 		}
 		try {
@@ -372,34 +384,42 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		out.close();
 	}
 
-	private static TPCMessage sendRecieveTPCMessage(Socket connection, TPCMessage message) throws KVException {
-		String xmlFile = message.toXML();
+	//Utility method, sends the TPCMessage to the master Socket and receives a response
+	private static TPCMessage sendRecieveTPCMessage(Socket connection, TPCMessage message) {
+		String xmlFile = null;
+		try {
+			xmlFile = message.toXML();
+		} catch (KVException e2) {
+			e2.printStackTrace();
+		}
 		PrintWriter out = null;
 		InputStream in = null;
 		try {
 			connection.setSoTimeout(15000);
 		} catch (SocketException e1) {
-			throw new KVException(new KVMessage("Unknown Error: Could net set Socket timeout"));
+			e1.printStackTrace();
 		}
 		try {
 			out = new PrintWriter(connection.getOutputStream(),true);
 			out.println(xmlFile);
 			connection.shutdownOutput();
 		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not send data"));
+			e.printStackTrace();
 		}
 		try {
 			in = connection.getInputStream();
 			message = new TPCMessage(in);
 			in.close();
 		} catch (IOException e) {
-			throw new KVException(new KVMessage("Network Error: Could not receive data"));
+			e.printStackTrace();
+		} catch (KVException e1) {
+			e1.printStackTrace();
 		}
 		out.close();
 		try {
 			connection.close();
 		} catch (IOException e) {
-			throw new KVException(new KVMessage("Unknown Error: Could not close socket"));
+			e.printStackTrace();
 		}
 		return message;
 	}
@@ -422,4 +442,19 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			return true;
 		}
 	}
+
+	private void sendReceiveAbort(String errorMessage, String tpcOpID, Socket master){
+		// send abort, receive a Global Abort
+		TPCMessage reply;
+		TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", tpcOpID, false);
+		reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
+
+		// write to log
+		tpcLog.appendAndFlush(reply);
+
+		// send ack
+		TPCMessage ackmessage = new TPCMessage("ack", reply.getTpcOpId());
+		TPCMasterHandler.sendTPCMessage(master, ackmessage);	
+	}
+
 }
