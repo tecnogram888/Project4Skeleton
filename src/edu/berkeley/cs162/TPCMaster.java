@@ -46,6 +46,7 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESedeKeySpec;
@@ -297,9 +298,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		String hostname = InetAddress.getLocalHost().getHostName();
 		while(hostname.length()<20)
 			hostname += hostname;
-		keySpec = new DESedeKeySpec(hostname.getBytes()); //In the real version, use the system name?
-		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
-		masterKey = kf.generateSecret(keySpec);
+		
+		
+		KeyGenerator keygen = KeyGenerator.getInstance("DESede");
+		masterKey = keygen.generateKey();
 
 	}
 

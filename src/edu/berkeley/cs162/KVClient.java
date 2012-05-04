@@ -38,7 +38,10 @@ import java.io.Serializable;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.security.InvalidKeyException;
 
+import javax.crypto.BadPaddingException;
+import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.SecretKey;
 
 
@@ -54,6 +57,7 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 	private String server = null;
 	private int port = 0;
 	private SecretKey masterKey;
+	private KVCrypt crypt;
 	
 	/**
 	 * @param server is the DNS reference to the Key-Value server
@@ -62,9 +66,16 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 	public KVClient(String server, int port) {
 		this.server = server;
 		this.port = port;
+		this.crypt = new KVCrypt();
 		try {
 			setUpKey();
+			crypt.setKey(masterKey);
+			crypt.setCipher();
+			crypt.setUp();
 		} catch (KVException e) {
+			// TODO How to handle this? The system is broken at this point... Maybe retry?
+			e.printStackTrace();
+		} catch (Exception e) {
 			// TODO How to handle this? The system is broken at this point... Maybe retry?
 			e.printStackTrace();
 		}
@@ -133,6 +144,18 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		}
 		String keyString = KVMessage.encodeObject(key);
 		String valueString = KVMessage.encodeObject(value);
+		try {
+			valueString = KVMessage.encodeObject(crypt.encrypt(valueString));
+		} catch (InvalidKeyException e) {
+			// TODO What should we do if encryption breaks?
+			e.printStackTrace();
+		} catch (BadPaddingException e) {
+			// TODO What should we do if encryption breaks?
+			e.printStackTrace();
+		} catch (IllegalBlockSizeException e) {
+			// TODO What should we do if encryption breaks?
+			e.printStackTrace();
+		}
 		if (keyString.isEmpty()) throw new KVException(new KVMessage("Empty key"));
 		if (valueString.isEmpty()) throw new KVException(new KVMessage("Empty value"));
 
@@ -165,7 +188,22 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 			throw new KVException(new KVMessage(message.getMessage()));
 		} else {
 			if (message.getValue() == null) throw new KVException(new KVMessage("Unknown Error: Get received \"null\" in value in the response"));
-			return (V)KVMessage.decodeObject(message.getValue());
+			byte[] encryptedBytes = (byte[])KVMessage.decodeObject(message.getValue());
+			String valueString = null;
+			try {
+				valueString = crypt.decrypt(encryptedBytes);
+			} catch (InvalidKeyException e) {
+				// TODO What should we do if encryption breaks?
+				e.printStackTrace();
+			} catch (BadPaddingException e) {
+				// TODO What should we do if encryption breaks?
+				e.printStackTrace();
+			} catch (IllegalBlockSizeException e) {
+				// TODO What should we do if encryption breaks?
+				e.printStackTrace();
+			}
+			
+			return (V)KVMessage.decodeObject(valueString);
 		}
 	}
 
