@@ -294,10 +294,17 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// delayed start ThreadPool
 		threadpool = new ThreadPool(10, false); //TODO: how many threads?
 		
-		keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes()); //In the real version, use the system name?
+		String hostname = InetAddress.getLocalHost().getHostName();
+		while(hostname.length()<20)
+			hostname += hostname;
+		keySpec = new DESedeKeySpec(hostname.getBytes()); //In the real version, use the system name?
 		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
 		masterKey = kf.generateSecret(keySpec);
 	
+	}
+	
+	private SecretKey getMasterKey() {
+		return masterKey;
 	}
 
 	/**
@@ -659,12 +666,14 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		SlaveInfo slaveServer;
 		SlaveInfo successor;
 		V value;
+		boolean finished;
 		
 		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor, V value){
 			this.message = msg;
 			this.slaveServer = firstReplica;
 			this.successor = successor;
 			this.value = value;
+			this.finished = false;
 		}
 		
 		@Override
@@ -681,6 +690,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				} else {
 					e.printStackTrace();
 					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					this.finished = true;
+					this.notifyAll();
 					return;
 				}
 			}
@@ -692,7 +703,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} else {
 				try {
 					value = (V) KVMessage.encodeObject(slaveAnswer.getValue());
-					// TODO wake up parent
+					this.finished = true;
+					this.notifyAll();
 					return;
 				} catch (KVException e) {
 					// TODO Auto-generated catch block
@@ -700,7 +712,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				}
 			}
 			// if it gets here, response was wrong so try second replica
-
+			
 			try {
 				slaveAnswer = sendRecieveKV(message, slaveServer.hostName, slaveServer.port);
 			} catch (KVException e) {
@@ -709,6 +721,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				} else {
 					e.printStackTrace();
 					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					this.finished = true;
+					this.notifyAll();
 					return;
 				}
 			}
@@ -718,12 +732,25 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				// temp.readLock().unlock();
 				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 			} else {
-				slaveAnswer.getValue();
-				// TODO return the value to parent thread somehow
-				// wake up the parent
+				try {
+					value = (V) KVMessage.encodeObject(slaveAnswer.getValue());
+					this.finished = true;
+					this.notifyAll();
+					return;
+				} catch (KVException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 			// if it gets here both didn't work
-			// TODO
+		}
+		
+		public V getValue() {
+			return this.value;
+		}
+		
+		public boolean getFinished() {
+			return this.finished;
 		}
 	}
 	
@@ -746,14 +773,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			try {
 				SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 				SlaveInfo successor = findSuccessor(firstReplica);
-				threadpool.addToQueue(
-						new getRunnable<K,V>(msg, firstReplica, successor, value));
+				Runnable tempGetRunnable = new getRunnable<K,V>(msg, firstReplica, successor, value);
+				threadpool.addToQueue(tempGetRunnable);
 				// TODO DOUG sleeping on threads
 				// value somehow gets set to the proper value
+				synchronized (tempGetRunnable) {
+					while(((getRunnable<K,V>) tempGetRunnable).getFinished() == false)
+						tempGetRunnable.wait();
+				}
+				value = ((getRunnable<K,V>) tempGetRunnable).getValue();
 				if (value != null) {
+					accessLock.writeLock().lock();
 					masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
-				} else {
-					// ERROR? Or OK to return null when neither slaveServer has it
+					accessLock.writeLock().unlock();
 				}
 			} catch (InterruptedException e) {
 				//sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
