@@ -106,8 +106,8 @@ public class TPCLogTest {
 			TPCMessage y2 = (TPCMessage) log.getEntries().get(x);
 			assertTrue(y1.equals(y2));
 		}
-
 		
+		//verify that log hasInterruptedTpcOperation
+		assertTrue(log2.hasInterruptedTpcOperation());		
 	}
-
 }

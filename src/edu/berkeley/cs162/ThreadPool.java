@@ -38,6 +38,7 @@ public class ThreadPool {
 	 */
 	protected Thread threads[];
 	protected LinkedList<Runnable> tasks;
+	protected int size;
 
 	/**
 	 * Initialize the number of threads required in the threadpool. 
@@ -47,6 +48,7 @@ public class ThreadPool {
 	public ThreadPool(int size)
 	{
 		// implement me
+		this.size = size;
 		tasks = new LinkedList<Runnable>();
 		threads = new Thread[size];
 		for (int i=0;i<size;i++) {
@@ -54,10 +56,16 @@ public class ThreadPool {
 			threads[i].start();
 		}
 	}
-
-	public void addToThreadPool (int size)
-	{
-		threads = new Thread[size+threads.length];
+	
+	// this constructor allows for a delayed start
+	public ThreadPool(int size, boolean start) {
+		this.size = size;
+		tasks = new LinkedList<Runnable>();
+	}
+	
+	// call to start threadpool on a delayed start - only to be used with 'delayed start' constructor
+	public void startPool() {
+		threads = new Thread[size];
 		for (int i=0;i<size;i++) {
 			threads[i] = new WorkerThread(this);
 			threads[i].start();
