@@ -39,6 +39,8 @@ import java.net.Socket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 
+import javax.crypto.SecretKey;
+
 
 /**
  * This class is used to communicate with (appropriately marshalling and unmarshalling) 
@@ -51,6 +53,7 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 
 	private String server = null;
 	private int port = 0;
+	private SecretKey masterKey;
 	
 	/**
 	 * @param server is the DNS reference to the Key-Value server
@@ -59,6 +62,23 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 	public KVClient(String server, int port) {
 		this.server = server;
 		this.port = port;
+		try {
+			setUpKey();
+		} catch (KVException e) {
+			// TODO How to handle this? The system is broken at this point... Maybe retry?
+			e.printStackTrace();
+		}
+		
+	}
+	
+	private void setUpKey() throws KVException {
+		KVMessage keyMess = sendRecieve(new KVMessage("getEnKey", null, null));
+		if (!"resp".equals(keyMess.getMsgType())){
+			throw new KVException(new KVMessage("Incorrect server response to encryption key request"));
+		}
+		String s = keyMess.getMessage();
+		masterKey = (SecretKey)KVMessage.decodeObject(s);
+		
 	}
 	
 	private KVMessage sendRecieve(KVMessage message) throws KVException {

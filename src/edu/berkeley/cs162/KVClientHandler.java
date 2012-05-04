@@ -159,7 +159,12 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				e.printStackTrace();
 			}
 		} else if ("getEnKey".equals(mess.getMsgType())){
-			KVMessage message = new KVMessage(KVMessage.encodeObject(tpcMaster.getMasterKey()));
+			KVMessage message = null;
+			try {
+				message = new KVMessage(KVMessage.encodeObject(tpcMaster.getMasterKey()));
+			} catch (KVException e) {
+				e.printStackTrace();
+			}
 			KVClientHandler.sendMessage(client, message);	
 		
 		} else if ("putreq".equals(mess.getMsgType())) {

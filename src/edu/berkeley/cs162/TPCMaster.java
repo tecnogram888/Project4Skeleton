@@ -303,7 +303,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	
 	}
 	
-	private SecretKey getMasterKey() {
+	public SecretKey getMasterKey() {
 		return masterKey;
 	}
 
