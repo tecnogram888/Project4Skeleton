@@ -150,7 +150,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 			// check to see if putreq will send back an ABORT
 			TPCMessage reply = null;
-			
+
 			if (!checkKey(message.getKey())){
 				TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
 				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
@@ -161,13 +161,10 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
 				reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
 			}
-			
+
 			// write to log
 			tpcLog.appendAndFlush(reply);
-			
-			//This is where Luke left off :(
-			asdfasdf
-			
+
 			if (reply.getMsgType().equals("commit")){
 				TPCState = EState.COMMIT;
 			} else if (reply.getMsgType().equals("abort")){
@@ -233,17 +230,18 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 			// check to see if putreq will send back an ABORT
 			TPCMessage reply = null;
-			try{
-				if (!checkValue(message.getValue())){
-					reply = sendReceiveAbort("Over sized value", message.getTpcOpId(), master);
-				} else{
-					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
-				}
-			} catch (KVException e){
-				e.printStackTrace();
-				sendTPCMessage(master, new TPCMessage("abort", e.getMsg().getMessage(), TpcOpID, false));
+
+			if (!checkValue(message.getValue())){
+				TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
+				reply = TPCMasterHandler.sendRecieveTPCMessage(master, abortMessage);
+			} else{
+				TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
+				reply = TPCMasterHandler.sendRecieveTPCMessage(master, readyMessage);
 			}
+			
+			// write to log
+			tpcLog.appendAndFlush(reply);
+			
 			if ("commit".equals(reply.getMsgType())){
 				TPCState = EState.COMMIT;
 			} else if ("abort".equals(reply.getMsgType())){
