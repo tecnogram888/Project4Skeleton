@@ -295,7 +295,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		try {
 			message = new TPCMessage(in);
 		} catch (KVException e) {
-			TPCClientHandler.sendMessage(master, e.getMsg());
+			KVClientHandler.sendMessage(master, e.getMsg());
 			return;
 		}
 

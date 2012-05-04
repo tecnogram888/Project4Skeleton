@@ -65,50 +65,106 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		public TPCRegistrationHandler(int connections) {
 			threadpool = new ThreadPool(connections);	
 		}
+		private class registrationRunnable implements Runnable{
+			private Socket client;
+			public registrationRunnable (Socket _client){
+				this.client = _client;
+			}
+			public void run(){
+				PrintWriter out = null;
+				// TODO in is not used...
+				InputStream in = null;
+				SlaveInfo newSlave = null;
+				TPCMessage registration = null;
 
+				// read registration message from SlaveServer
+				try {
+					registration = new TPCMessage(client.getInputStream());
+					newSlave = new SlaveInfo(registration.getMessage());
+				} catch (KVException e) {
+					System.err.println("error reading registration message");
+				} catch (IOException e) {
+					System.err.println("error reading input stream");
+				}//TODO How to handle these errors?
+
+				addToConsistentHash(newSlave);
+				synchronized(consistentHash){
+				if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
+					consistentHash.notify();
+				}
+
+				try {
+					out = new PrintWriter(client.getOutputStream(), true);
+				} catch (IOException e) {
+					System.err.println("could not get slave's outputstream");
+				}
+				TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
+				String xmlFile = null;
+				try {
+					xmlFile = msg.toXML();
+				} catch (KVException e) {
+					System.err.println("could not convert TPCMessage to XML");
+				}
+				out.println(xmlFile);
+				try {
+					client.shutdownOutput();
+					// added by luke
+					client.close();
+					out.close();
+				} catch (IOException e) {
+					System.err.println("could not shutdown client ouptut");
+				}
+			}
+		}
 		@Override
 		public void handle(Socket client) throws IOException {
-			PrintWriter out = null;
-			// TODO in is not used...
-			InputStream in = null;
-			SlaveInfo newSlave = null;
-			TPCMessage registration = null;
-
-			// read registration message from SlaveServer
 			try {
-				registration = new TPCMessage(client.getInputStream());
-				newSlave = new SlaveInfo(registration.getMessage());
-			} catch (KVException e) {
-				System.err.println("error reading registration message");
+				threadpool.addToQueue(new registrationRunnable(client));
+			} catch (InterruptedException e) {
+				// TODO How to handle this error?
+				e.printStackTrace();
 			}
-
-			addToConsistentHash(newSlave);
-			synchronized(consistentHash){
-			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
-				consistentHash.notify();
-			}
-
-			try {
-				out = new PrintWriter(client.getOutputStream(), true);
-			} catch (IOException e) {
-				System.err.println("could not get slave's outputstream");
-			}
-			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
-			String xmlFile = null;
-			try {
-				xmlFile = msg.toXML();
-			} catch (KVException e) {
-				System.err.println("could not convert TPCMessage to XML");
-			}
-			out.println(xmlFile);
-			try {
-				client.shutdownOutput();
-				// added by luke
-				client.close();
-				out.close();
-			} catch (IOException e) {
-				System.err.println("could not shutdown client ouptut");
-			}
+//			PrintWriter out = null;
+//			// TODO in is not used...
+//			InputStream in = null;
+//			SlaveInfo newSlave = null;
+//			TPCMessage registration = null;
+//
+//			// read registration message from SlaveServer
+//			try {
+//				registration = new TPCMessage(client.getInputStream());
+//				newSlave = new SlaveInfo(registration.getMessage());
+//			} catch (KVException e) {
+//				System.err.println("error reading registration message");
+//			}
+//
+//			addToConsistentHash(newSlave);
+//			synchronized(consistentHash){
+//			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
+//				consistentHash.notify();
+//			}
+//
+//			try {
+//				out = new PrintWriter(client.getOutputStream(), true);
+//			} catch (IOException e) {
+//				System.err.println("could not get slave's outputstream");
+//			}
+//			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
+//			String xmlFile = null;
+//			try {
+//				xmlFile = msg.toXML();
+//			} catch (KVException e) {
+//				System.err.println("could not convert TPCMessage to XML");
+//			}
+//			out.println(xmlFile);
+//			try {
+//				client.shutdownOutput();
+//				// added by luke
+//				client.close();
+//				out.close();
+//			} catch (IOException e) {
+//				System.err.println("could not shutdown client ouptut");
+//			}
 		}
 	}
 
@@ -247,15 +303,26 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * Start registration server in a separate thread
 	 */
 	public void run() {
-	
-		try {
 			// create a runnable and thread for regServer
 			class regServerRunnable implements Runnable {
 				
 				@Override 
 				public void run() {
 					try {
+						regServer.connect();
 						regServer.run();
+						} catch (IOException e) {
+							e.printStackTrace();
+							}
+					}
+				}
+			class clientServerRunnable implements Runnable {
+				
+				@Override 
+				public void run() {
+					try {
+						clientServer.connect();
+						clientServer.run();
 						} catch (IOException e) {
 							e.printStackTrace();
 							}
@@ -274,12 +341,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				}
 				}
 			}
-			clientServer.run();
+			Thread clientServerThread = new Thread(new clientServerRunnable());
+			clientServerThread.start();
+			
+			
 
-		} catch (IOException e) {
-			// TODO
-			System.err.println("IO exception caught");
-		}
+		
 	}
 
 	/**
@@ -608,7 +675,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Move on to next slaveServer
 				} else {
 					e.printStackTrace();
-					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVClientHandlerOLD.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					return;
 				}
 			}
@@ -631,7 +698,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					// Connection timed out
 				} else {
 					e.printStackTrace();
-					KVClientHandler.sendMessage(slaveServer.getKvSocket(), e.getMsg());
+					KVClientHandlerOLD.sendMessage(slaveServer.getKvSocket(), e.getMsg());
 					return;
 				}
 			}
