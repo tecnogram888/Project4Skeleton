@@ -55,12 +55,17 @@ public class ThreadPool {
 		}
 	}
 
-	public void addToThreadPool (int size)
+	public void addThreads (int size)
 	{
-		threads = new Thread[size+threads.length];
+		Thread[] temp = new Thread[size];
+		
+		for (int i=0;i<threads.length;i++) {
+			temp[i] = threads[i];
+		}
+		
 		for (int i=0;i<size;i++) {
-			threads[i] = new WorkerThread(this);
-			threads[i].start();
+			threads[i+threads.length] = new WorkerThread(this);
+			threads[i+threads.length].start();
 		}
 	}
 
