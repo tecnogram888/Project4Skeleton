@@ -286,7 +286,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	 * @throws Exception
 	 */
 	public TPCMaster(String[] slaves) throws Exception {
-		// implement me
 		listOfSlaves = slaves;
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
@@ -302,7 +301,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		
 		KeyGenerator keygen = KeyGenerator.getInstance("DESede");
 		masterKey = keygen.generateKey();
-
 	}
 
 	public SecretKey getMasterKey() {
@@ -756,12 +754,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 	public V handleGet(KVMessage msg) throws KVException {
 		if (!"getreq".equals(msg.getMsgType())){
-			// TODO this should not happen, so crash the server if it does
-			System.exit(1);
-			// throw new KVException(new KVMessage("handleGet called without a getRequest"));
+			System.err.println("handleGet called without a getRequest");
+			throw new KVException(new KVMessage("handleGet called without a getRequest"));
 		}
 
-		// implement me
 		ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
 		if (accessLock == null) {
 			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
