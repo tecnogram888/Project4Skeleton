@@ -8,6 +8,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 
+import javax.naming.directory.BasicAttribute;
+
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -20,7 +22,7 @@ public class TPCMessageTest {
 		assertTrue(msg.getMessage() == "string");
 		assertTrue(msg.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for converting a KV successful put message to a TPC message
 	public void convertKVMessage2() {
 		TPCMessage msg = new TPCMessage(new KVMessage(false, "string"), "0");
@@ -28,7 +30,7 @@ public class TPCMessageTest {
 		assertTrue(msg.getMessage() == "string");
 		assertTrue(msg.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for converting a KV message to a TPC message
 	public void convertKVMessage3() {
 		TPCMessage msg = new TPCMessage(new KVMessage("string1", "string2"), "0");
@@ -37,7 +39,7 @@ public class TPCMessageTest {
 		assertTrue(msg.getValue() == null);
 		assertTrue(msg.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for converting a KV message to a tpc message
 	public void convertKVMessage4() {
 		TPCMessage msg = new TPCMessage(new KVMessage("string1", "string2", "string3"), "0");
@@ -46,7 +48,7 @@ public class TPCMessageTest {
 		assertTrue(msg.getValue() == "string3");
 		assertTrue(msg.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for tpc log ready
 	public void TPCLogReady() {
 		TPCMessage msg = new TPCMessage("type", "key", "value", "message", "0");
@@ -56,7 +58,7 @@ public class TPCMessageTest {
 		assertTrue(msg.getMessage() == "message");
 		assertTrue(msg.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for tpc put and tpc log del messages
 	public void TPCPut() { 
 		TPCMessage msg = new TPCMessage("putreq", "key", "value", "0");
@@ -70,7 +72,7 @@ public class TPCMessageTest {
 		assertTrue(msg2.getMessage() == "msg");
 		assertTrue(msg2.getTpcOpId() == "0");
 	}
-	
+
 	@Test // tests constructor for 2PC Ready Messages, 2PC Decisions, 2PC Acknowledgement, Register, Registration ACK, Error Message, Server response, 2PCLog abort, 2PCLog commit, and KeyRequest
 	public void TPEtc() { // 
 		TPCMessage msg = new TPCMessage("delreq", "key", "0", false);
@@ -82,8 +84,52 @@ public class TPCMessageTest {
 		assertTrue(msg2.getMessage() == "msg");
 		assertTrue(msg2.getTpcOpId() == "0");
 	}
-	
-	@Test // tests sending a message
+
+	@Test
+	public void Test2pcPUT() {
+		BasicAttribute keyTest = new BasicAttribute("key");
+		BasicAttribute valueTest = new BasicAttribute("value");
+		TPCMessage test = null;
+		try {
+			test = new TPCMessage("putreq", KVMessage.encodeObject(keyTest), KVMessage.encodeObject(valueTest), "2PC Operation ID");
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		assertTrue(test.getMsgType() == "putreq");
+		try {
+			assertEquals(valueTest, TPCMessage.decodeObject(test.getValue()));
+			assertEquals(keyTest, TPCMessage.decodeObject(test.getKey()));
+		} catch (KVException e) {
+			// Auto-fail if an exception is thrown
+			assertTrue(false);
+			e.printStackTrace();
+			System.exit(1);
+		}
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = null;
+		try {
+			x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+					+ "<KVMessage type=\"putreq\">\n" +
+					"<Key>" + KVMessage.encodeObject(keyTest) + "</Key>\n" + 
+					"<Value>" + KVMessage.encodeObject(valueTest) + "</Value>\n" + 
+					"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+					"</KVMessage>\n";
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		assertEquals(x, xml);
+	}
+
+	/*	@Test // tests sending a message
 	public void sendTPCMessageTest() {
 		ServerSocket server = null;
 		Socket client = null;
@@ -94,7 +140,7 @@ public class TPCMessageTest {
 		  } catch (IOException e) {
 		    System.err.println("Could not listen on port 8080");
 		  }
-		
+
 		TPCMessage testMsg = new TPCMessage("test string");
 		Socket testSocket = null;
 		try {
@@ -106,7 +152,7 @@ public class TPCMessageTest {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
-		
+
 		try{
 		    client = server.accept();
 		  } catch (IOException e) {
@@ -120,8 +166,8 @@ public class TPCMessageTest {
 			  } catch (IOException e) {
 			    System.err.println("Read failed");
 			  }
-		
-		
+
+
 		try {
 			TPCMessage.sendTPCMessage(testSocket, testMsg);
 		} catch (KVException e) {
@@ -141,8 +187,8 @@ public class TPCMessageTest {
 				e.printStackTrace();
 			}
 		}
-		
-	}
-	
-	
+
+	}*/
+
+
 }
