@@ -284,8 +284,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
-		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
-		//TODO: clientServer needs a NetworkHandler --> new TPCClientHandler
+	
 	}
 
 	/**
@@ -316,18 +315,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							}
 					}
 				}
-			class clientServerRunnable implements Runnable {
-				
-				@Override 
-				public void run() {
-					try {
-						clientServer.connect();
-						clientServer.run();
-						} catch (IOException e) {
-							e.printStackTrace();
-							}
-					}
-				}
+			
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
 			while (consistentHash.size() != listOfSlaves.length) {
