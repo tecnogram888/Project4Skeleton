@@ -94,7 +94,7 @@ public class TPCLogTest {
 		log.appendAndFlush(put2);
 		
 		//test rebuilding
-		String logPath = log.logPath;
+		String logPath = log.logPath();
 		TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server);
 		try {
 			log2.rebuildKeyServer();
