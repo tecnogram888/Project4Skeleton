@@ -73,6 +73,10 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	public void handle(Socket master) throws IOException {
 
 		//TODO SOLOMON: ARE THERE ANY LOCKS IN HANDLE? I THINK THERE AREN'T, BUT CAN YOU DOUBLE-CHECK?
+		
+		// assume master is immortal
+		// TODO uncommen line below
+		// master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 
