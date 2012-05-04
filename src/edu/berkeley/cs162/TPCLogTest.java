@@ -13,7 +13,7 @@ public class TPCLogTest {
 	public void testAppendAndFlush() {
 		//set up TPCLog
 		KeyServer<String, String> server = new KeyServer<String, String>(10); 
-		TPCLog log = new TPCLog ("logPath", server);
+		TPCLog<String, String> log = new TPCLog<String, String> ("logPath", server);
 		ArrayList<TPCMessage> list = log.getEntries();
 		
 		//test put request & commit
@@ -63,7 +63,7 @@ public class TPCLogTest {
 	public void testRebuildKeyServer() {
 		//set up TPCLog
 		KeyServer<String, String> server = new KeyServer<String, String>(10); 
-		TPCLog log = new TPCLog ("logPath", server);
+		TPCLog<String, String> log = new TPCLog<String, String> ("logPath", server);
 		
 		//adds put request & abort
 		TPCMessage put2 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
@@ -84,21 +84,26 @@ public class TPCLogTest {
 		log.appendAndFlush(abortDel2);
 		
 		//adds del request & commit
-		TPCMessage del1 = new TPCMessage("ready", "key4", "delreq", "4");
+		TPCMessage del1 = new TPCMessage("ready", "key2", "delreq", "4");
 		log.appendAndFlush(del1);
 		TPCMessage commitDel1 = new TPCMessage ("commit","4");
 		log.appendAndFlush(commitDel1);
 		
 //		KeyServer<String, String> server2 = new KeyServer<String, String>(10);
 		String logPath = log.logPath;
-		TPCLog log2 = new TPCLog (logPath, server);
+		TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server);
 		try {
 			log2.rebuildKeyServer();
 		} catch (KVException e) {
 			System.out.println("Error rebuilding " + e);
 		}
-		assertTrue(log2.getEntries().equals(log.getEntries()));
-
+		for (int x = 0; x < log.getEntries().size(); x++) {
+			if (!log2.getEntries().get(x).equals(log.getEntries().get(x))) {
+				TPCMessage y1 = log2.getEntries().get(x);
+				TPCMessage y2 = log.getEntries().get(x);
+				assertEquals(y1, y2);
+			}
+		}
 	}
 
 }
