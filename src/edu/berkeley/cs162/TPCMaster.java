@@ -293,6 +293,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
 		
+		// create an empty thread pool - will add threads later
+		threadpool = new ThreadPool(0);
+		
 		keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes());//In the real version, use the system name?
 		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
 		masterKey = kf.generateSecret(keySpec);
