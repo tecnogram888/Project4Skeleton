@@ -92,10 +92,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				}//TODO How to handle these errors?
 
 				addToConsistentHash(newSlave);
-				synchronized(consistentHash){
-				if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
-					consistentHash.notify();
-				}
+				if (consistentHash.size() >= listOfSlaves.length)
+					TPCMaster.this.threadpool.startPool();
 
 				try {
 					out = new PrintWriter(client.getOutputStream(), true);
@@ -291,12 +289,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		listOfSlaves = slaves;
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
-		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
+		regServer.addHandler(new TPCRegistrationHandler(1));
 		
-		// create an empty thread pool - will add threads later
-		threadpool = new ThreadPool(0);
+		// delayed start ThreadPool
+		threadpool = new ThreadPool(10, false); //TODO: how many threads?
 		
-		keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes());//In the real version, use the system name?
+		keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes()); //In the real version, use the system name?
 		SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
 		masterKey = kf.generateSecret(keySpec);
 	
