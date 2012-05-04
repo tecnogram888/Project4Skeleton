@@ -5,6 +5,14 @@ import static org.junit.Assert.*;
 
 public class ThreadPoolTest {
 	
+	// tests that threadPool instantiates w/ 0 threads
+		@Test
+		public void testPoolSize0() {
+			int size = 0;
+			ThreadPool testPool = new ThreadPool(size);
+			assertEquals(testPool.threads.length, 0);
+		}
+	
 	// tests that threadPool instantiates successfully
 	@Test
 	public void testPoolSize() {

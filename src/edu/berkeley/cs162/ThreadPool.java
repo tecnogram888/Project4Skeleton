@@ -54,7 +54,15 @@ public class ThreadPool {
 			threads[i].start();
 		}
 	}
-	
+
+	public void addToThreadPool (int size)
+	{
+		threads = new Thread[size+threads.length];
+		for (int i=0;i<size;i++) {
+			threads[i] = new WorkerThread(this);
+			threads[i].start();
+		}
+	}
 
 	/**
 	 * Add a job to the queue of tasks that has to be executed. As soon as a thread is available, 

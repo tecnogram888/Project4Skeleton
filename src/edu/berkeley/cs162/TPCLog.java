@@ -40,7 +40,7 @@ import java.util.ArrayList;
 public class TPCLog<K extends Serializable, V extends Serializable> {
 
 	//originally: private String logPath = null;
-	String logPath = null;
+	private String logPath = null;
 	private KeyServer<K, V> keyServer = null;
 
 	// Log entries
@@ -50,6 +50,9 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	// i.e., when the last 2PC operation before crashing was in READY state)
 	private KVMessage interruptedTpcOperation = null;
 
+	public String logPath() {
+		return logPath;
+	}
 	public TPCLog(String logPath, KeyServer<K, V> keyServer) {
 		this.logPath = logPath;
 		entries = new ArrayList<KVMessage>();
