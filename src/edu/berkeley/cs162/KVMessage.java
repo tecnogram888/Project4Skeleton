@@ -41,6 +41,7 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 import org.w3c.dom.*;
 
@@ -159,7 +160,7 @@ public class KVMessage{
 	 * http://www.mkyong.com/java/how-to-read-xml-file-in-java-dom-parser/
 	 * @param input
 	 */	
-	public KVMessage(InputStream input) throws KVException{
+	public KVMessage(InputStream input) throws KVException, SocketTimeoutException{
 			DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder docBuilder;
 			try {
@@ -170,6 +171,8 @@ public class KVMessage{
 			Document doc = null;
 			try {
 				doc = docBuilder.parse(new NoCloseInputStream(input));
+			} catch (SocketTimeoutException e){
+				throw e;
 			} catch (SAXException e) {
 				throw new KVException(new KVMessage("XML Error: Received unparseable message"));
 			} catch (IOException e) {
@@ -386,7 +389,7 @@ public class KVMessage{
 	/** utility function that receives a KVMessage across a socket
 	 * @param socket
 	 */
-	public static KVMessage receiveMessage(Socket connection) throws KVException {
+	public static KVMessage receiveMessage(Socket connection) throws KVException, SocketTimeoutException {
 		InputStream in = null;
 		KVMessage rtn = null;
 		
@@ -394,6 +397,8 @@ public class KVMessage{
 			in = connection.getInputStream();
 			rtn = new KVMessage(in);
 			in.close();
+		} catch (SocketTimeoutException e){
+			throw e;
 		} catch (IOException e) {
 			// should NOT throw an exception here
 			e.printStackTrace();
