@@ -318,19 +318,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
-			while (consistentHash.size() != listOfSlaves.length) {
-				// TODO sleep clientServer
-				synchronized(consistentHash){
-				try {
-					consistentHash.wait();
-				} catch (InterruptedException e) {
-					// TODO Doug how to handle this issue? In this, just die I think
-					e.printStackTrace();
-				}
-				}
-			}
-			Thread clientServerThread = new Thread(new clientServerRunnable());
-			clientServerThread.start();
 			
 			
 
