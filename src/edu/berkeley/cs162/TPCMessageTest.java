@@ -86,7 +86,7 @@ public class TPCMessageTest {
 	}
 
 	@Test
-	public void Test2pcPUT() {
+	public void Test2pcPUTReq() {
 		BasicAttribute keyTest = new BasicAttribute("key");
 		BasicAttribute valueTest = new BasicAttribute("value");
 		TPCMessage test = null;
@@ -106,6 +106,7 @@ public class TPCMessageTest {
 			e.printStackTrace();
 			System.exit(1);
 		}
+		assertTrue(test.getMessage() == null);
 		assertTrue(test.getTpcOpId() == "2PC Operation ID");
 		String xml = null;
 		try {
@@ -126,6 +127,70 @@ public class TPCMessageTest {
 			e.printStackTrace();
 			fail();
 		}
+		assertEquals(x, xml);
+	}
+
+	@Test
+	public void Test2pcDELReq() {
+		BasicAttribute keyTest = new BasicAttribute("key");
+		TPCMessage test = null;
+		try {
+			test = new TPCMessage("delreq", KVMessage.encodeObject(keyTest), "2PC Operation ID", true);
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		assertTrue(test.getMsgType() == "delreq");
+		try {
+			assertEquals(keyTest, TPCMessage.decodeObject(test.getKey()));
+		} catch (KVException e) {
+			// Auto-fail if an exception is thrown
+			assertTrue(false);
+			e.printStackTrace();
+			System.exit(1);
+		}
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = null;
+		try {
+			x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+					+ "<KVMessage type=\"delreq\">\n" +
+					"<Key>" + KVMessage.encodeObject(keyTest) + "</Key>\n" + 
+					"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+					"</KVMessage>\n";
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		assertEquals(x, xml);
+	}
+
+	@Test
+	public void Test2pcREADYresp() {
+		TPCMessage test = new TPCMessage("ready","2PC Operation ID");
+		assertTrue(test.getMsgType() == "ready");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"ready\">\n" + 
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
 		assertEquals(x, xml);
 	}
 
