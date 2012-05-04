@@ -471,12 +471,12 @@ public class TPCMessage implements Serializable {
 	}
 	
 	boolean equals(TPCMessage message){
-		return (this.msgType == null && message.msgType == null || this.msgType.equals(message.msgType) &&
-				this.key == null && message.key == null || this.key.equals(message.key) &&
-				this.value == null && message.value == null || this.value.equals(message.value) &&
-				this.message == null && message.message == null || this.message.equals(message.message) &&
-				this.isPutResp == message.isPutResp &&
-				this.tpcOpId == null && message.tpcOpId == null || this.tpcOpId.equals(message.tpcOpId));
+		return ((this.msgType == null && message.msgType == null || this.msgType.equals(message.msgType)) &&
+				(this.key == null && message.key == null || this.key.equals(message.key)) &&
+				(this.value == null && message.value == null || this.value.equals(message.value)) &&
+				(this.message == null && message.message == null || this.message.equals(message.message)) &&
+				(this.isPutResp == message.isPutResp) &&
+				(this.tpcOpId == null && message.tpcOpId == null || this.tpcOpId.equals(message.tpcOpId)));
 	}
 }
 
