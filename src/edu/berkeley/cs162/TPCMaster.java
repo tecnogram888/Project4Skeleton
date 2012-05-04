@@ -284,8 +284,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// Create registration server
 		regServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 9090);
 		regServer.addHandler(new TPCRegistrationHandler()); //TODO: how many connections to instantiate with?
-		clientServer = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
-		//TODO: clientServer needs a NetworkHandler --> new TPCClientHandler
+	
 	}
 
 	/**
@@ -316,33 +315,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							}
 					}
 				}
-			class clientServerRunnable implements Runnable {
-				
-				@Override 
-				public void run() {
-					try {
-						clientServer.connect();
-						clientServer.run();
-						} catch (IOException e) {
-							e.printStackTrace();
-							}
-					}
-				}
+			
 			Thread regServerThread = new Thread(new regServerRunnable());
 			regServerThread.start();
-			while (consistentHash.size() != listOfSlaves.length) {
-				// TODO sleep clientServer
-				synchronized(consistentHash){
-				try {
-					consistentHash.wait();
-				} catch (InterruptedException e) {
-					// TODO Doug how to handle this issue? In this, just die I think
-					e.printStackTrace();
-				}
-				}
-			}
-			Thread clientServerThread = new Thread(new clientServerRunnable());
-			clientServerThread.start();
 			
 			
 
@@ -450,6 +425,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 		@Override
 		public void run() {
+			TPCMessage response = null;
 			//TODO Luke,Soloman,Doug need to change 'message' after the loop so we send different messages, reset the field at the end of each conditional block
 			while (true) {
 				switch (TPCState) {
@@ -463,8 +439,20 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					b1 = false;//Set boolean to false when starting a section, true when finished.
 					try {
 						// send the request to the slaveServer
-						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
-						
+						response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+					} catch (KVException e) {
+						//TODO Doug is this how we should handle errors?
+						if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+							// Connection timed out
+							TPCStateLock.lock();
+							TPCState = EState.ABORT;
+							// check if other guy is sleeping, if so wake him up, if not go to sleep
+							TPCStateLock.unlock();
+							continue;
+						} else {
+							e.printStackTrace();
+						}
+					}
 						// check to see if response is ready or abort
 						if ("ready".equals(response.getMsgType())){
 							TPCStateLock.lock();
@@ -514,23 +502,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							System.err.println("Coordinator did not get a ready or abort response");
 							System.exit(1);
 						}
-					} catch (KVException e) {
-						//TODO Doug is this how we should handle errors?
-						if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
-							// Connection timed out
-							TPCStateLock.lock();
-							TPCState = EState.ABORT;
-							// check if other guy is sleeping, if so wake him up, if not go to sleep
-							TPCStateLock.unlock();
-						} else {
-							e.printStackTrace();
-						}
-					}
+					
 					break;
 				case ABORT:
 					b1 = false;//False at start of section
 					try {
-						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
 						// check to see if response is ready or abort
 						if (!"ack".equals(response.getMsgType())){
 							//TODO Doug how to handle this error?
@@ -548,13 +525,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 					b1 = true;//Finished Abort section
 					otherThreadDone.notifyAll();
-					TPCState = EState.NOSTATE;
 					return;
 					
 				case COMMIT:
 					b1 = false;//Start of section
 					try {
-						TPCMessage response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+						response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
 						// check to see if response is ready or abort
 						if (!"ack".equals(response.getMsgType())){
 							//TODO Doug how to handle this error?
@@ -572,7 +548,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 					b1 = true;
 					otherThreadDone.notifyAll();
-					TPCState = EState.NOSTATE;
 					return;
 					
 				default: 
@@ -583,7 +558,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		}
 
 	}
-
+	
+	public boolean performTPCOperation(KVMessage msg, boolean isPutRequest) throws KVException {
+		return performTPCOperation(msg);
+	}
+	
 	/**
 	 * Synchronized method to perform 2PC operations one after another
 	 * 
@@ -634,9 +613,20 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// TODO SOLOMON Update cache
 		// if (put) { cache.put() }
 		// if (del) {cache.del() }
+		
+		boolean success = (TPCState == EState.COMMIT);
+		TPCState = EState.NOSTATE;
+		if (success) {
+			if ("putreq".equals(msg.getMsgType())) {
+				masterCache.put((K) KVMessage.decodeObject(TPCmess.getKey()), 
+						(V) KVMessage.encodeObject(TPCmess.getValue()));
+			} else {
+				masterCache.del((K) KVMessage.decodeObject(TPCmess.getKey()) );
+			}
+		}
 		temp.writeLock().unlock();
 		transactionLock.unlock();
-		return true;
+		return success;
 	}
 
 	/**
@@ -655,11 +645,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		KVMessage message;
 		SlaveInfo slaveServer;
 		SlaveInfo successor;
+		V value;
 		
-		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor){
+		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor, V value){
 			this.message = msg;
 			this.slaveServer = firstReplica;
 			this.successor = successor;
+			this.value = value;
 		}
 		
 		@Override
@@ -685,9 +677,14 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				// temp.readLock().unlock();
 				// throw new KVException(new KVMessage("handleGet called without a getRequest"));
 			} else {
-				slaveAnswer.getValue();
-				// TODO return the value to parent thread somehow
-				// wake up the parent
+				try {
+					value = (V) KVMessage.encodeObject(slaveAnswer.getValue());
+					// TODO wake up parent
+					return;
+				} catch (KVException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
 			}
 			// if it gets here, response was wrong so try second replica
 
@@ -737,7 +734,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 				SlaveInfo successor = findSuccessor(firstReplica);
 				threadpool.addToQueue(
-						new getRunnable<K,V>(msg, firstReplica, successor));
+						new getRunnable<K,V>(msg, firstReplica, successor, value));
 				// TODO DOUG sleeping on threads
 				// value somehow gets set to the proper value
 				if (value != null) {
