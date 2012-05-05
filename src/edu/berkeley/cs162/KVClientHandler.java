@@ -72,31 +72,6 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		initialize(connections, tpcMaster);
 	}
 
-
-
-	/*	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
-	public static void sendMessage(Socket client, KVMessage message){
-		PrintWriter out = null;
-		try {
-			out = new PrintWriter(client.getOutputStream(), true);
-		} catch (IOException e) {
-			// Auto-generated catch block
-			e.printStackTrace();
-		}
-		try {
-			out.println(message.toXML());
-		} catch (KVException e) {
-			// should NOT ever throw exception here
-			e.printStackTrace();
-		}
-		try {
-			client.shutdownOutput();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		out.close();
-	}*/
-
 	/* (non-Javadoc)
 	 * @see edu.berkeley.cs162.NetworkHandler#handle(java.net.Socket)
 	 */
