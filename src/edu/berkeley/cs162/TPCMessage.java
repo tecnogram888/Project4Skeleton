@@ -41,6 +41,7 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
@@ -98,7 +99,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 		this.value = inputMessage.getValue();
 //		this.status = inputMessage.getStatus();
 		this.message = inputMessage.getMessage();
-		this.isPutResp = inputMessage.getIsPutResp();
+//		this.isPutResp = inputMessage.getIsPutResp();
 		this.tpcOpId = tpcOpID;
 	}
 
@@ -258,7 +259,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 	 * http://www.mkyong.com/java/how-to-read-xml-file-in-java-dom-parser/
 	 * @param input
 	 */	
-	public TPCMessage(InputStream input) throws KVException{
+	public TPCMessage(InputStream input) throws KVException, SocketTimeoutException{
 		DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
 		DocumentBuilder docBuilder;
 		try {
@@ -269,6 +270,8 @@ public class TPCMessage extends KVMessage implements Serializable {
 		Document doc = null;
 		try {
 			doc = docBuilder.parse(new NoCloseInputStream(input));
+		} catch (SocketTimeoutException e){
+			throw e;
 		} catch (SAXException e) {
 			throw new KVException(new KVMessage("XML Error: Received unparseable message"));
 		} catch (IOException e) {
@@ -471,7 +474,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 	/** utility function that receives a TPCMessage across a socket
 	 * @param socket
 	 */
-	public static TPCMessage receiveMessage(Socket connection){
+	public static TPCMessage receiveMessage(Socket connection) throws SocketTimeoutException{
 		InputStream in = null;
 		TPCMessage rtn = null;
 		
@@ -479,6 +482,8 @@ public class TPCMessage extends KVMessage implements Serializable {
 			in = connection.getInputStream();
 			rtn = new TPCMessage(in);
 			in.close();
+		} catch (SocketTimeoutException e){
+			throw e;
 		} catch (IOException e) {
 			// should NOT ever throw exception here
 			e.printStackTrace();

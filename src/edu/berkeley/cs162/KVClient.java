@@ -105,6 +105,8 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 			throw new KVException(new KVMessage("Network Error: Could not create socket"));
 		}
 		try {
+			//TODO uncomment line below, assume Master is immorta
+			//connection.setSoTimeout(0);
 			connection.setSoTimeout(15000);
 		} catch (SocketException e1) {
 			throw new KVException(new KVMessage("Unknown Error: Could net set Socket timeout"));
@@ -169,8 +171,8 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		// If the message is not "Success," it'll have an error message inside the return xml
 		if (!"Success".equals(message.getMessage())) throw new KVException(new KVMessage(message.getMessage()));
 
-		// return the boolean status
-		return message.getStatus();
+		// client will always return false now, since we no longer use status
+		return false;
 	}
 
 	@SuppressWarnings("unchecked")

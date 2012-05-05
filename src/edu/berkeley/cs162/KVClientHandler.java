@@ -72,31 +72,6 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		initialize(connections, tpcMaster);
 	}
 
-
-
-	/*	//Utility method, sends the KVMessage to the client Socket and closes output on the socket
-	public static void sendMessage(Socket client, KVMessage message){
-		PrintWriter out = null;
-		try {
-			out = new PrintWriter(client.getOutputStream(), true);
-		} catch (IOException e) {
-			// Auto-generated catch block
-			e.printStackTrace();
-		}
-		try {
-			out.println(message.toXML());
-		} catch (KVException e) {
-			// should NOT ever throw exception here
-			e.printStackTrace();
-		}
-		try {
-			client.shutdownOutput();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		out.close();
-	}*/
-
 	/* (non-Javadoc)
 	 * @see edu.berkeley.cs162.NetworkHandler#handle(java.net.Socket)
 	 */
@@ -109,6 +84,13 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 			mess = KVMessage.receiveMessage(client);
 		} catch (KVException e) {
 			KVMessage.sendMessage(client, e.getMsg());
+			return;
+		}
+		
+		if (mess.getMsgType().equals("ignoreNext")){
+			TPCMessage tpcMess = new TPCMessage(mess, "-1");
+			KVMessage result = tpcMaster.handleIgnore(tpcMess);
+			KVMessage.sendMessage(client, result);
 			return;
 		}
 
@@ -180,36 +162,16 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			// client will be closed at the end
 
 
-		} else if ("putreq".equals(mess.getMsgType())) {
-			// TODO DOUG ARE WE IMPLEMENTING THE STATUS FIELD?
-			boolean status = false;
+		} else if (mess.getMsgType().equals("putreq") || mess.getMsgType().equals("delreq")) {
+			boolean isPutReq = mess.getMsgType().equals("putreq");
 			try {
-				//need separate operations for put and delete
-				status = tpcMaster.performTPCOperation(mess);
+				tpcMaster.performTPCOperation(mess, isPutReq);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());
 				try {
 					client.close();
 				} catch (IOException e2) {
 					// These ones don't send errors, this is a server error
-					e2.printStackTrace();
-				}
-				return;
-			}
-			KVMessage message = new KVMessage(status, "Success");
-			KVMessage.sendMessage(client, message);
-
-			// client will be closed at the end
-
-
-		} else if ("delreq".equals(mess.getMsgType())) {
-			try {
-				tpcMaster.performTPCOperation(mess);
-			} catch (KVException e) {
-				KVMessage.sendMessage(client, e.getMsg());
-				try {
-					client.close();
-				} catch (IOException e2) {
 					e2.printStackTrace();
 				}
 				return;

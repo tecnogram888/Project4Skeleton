@@ -41,6 +41,7 @@ import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 import org.w3c.dom.*;
 
@@ -65,9 +66,9 @@ public class KVMessage{
 	private String msgType = null;
 	private String key = null;
 	private String value = null;
-	private boolean status = false;
+//	private boolean status = false;
 	private String message = null;
-	private boolean isPutResp = false;
+//	private boolean isPutResp = false;
 
 	public KVMessage(){
 		//do nothing
@@ -88,19 +89,24 @@ public class KVMessage{
 		this.value = null;
 	}
 	
-	//For constructing error messages and successful delete messages
+	public KVMessage(String msgType, String message, boolean ignore){
+		this.msgType = msgType;
+		this.message = message;
+	}
+	
+	//For constructing error messages and successful put + delete messages
 	public KVMessage(String message){
 		this.msgType = "resp";
 		this.message = message;
 	}
 	
-	//For successful put message
+/*	//For successful put message
 	public KVMessage(boolean status, String message){
 		this.status = status;
 		this.message = message;
 		this.msgType = "resp";
 		this.isPutResp = true;
-	}
+	}*/
 	
 	public String getMsgType(){
 		return msgType;
@@ -114,17 +120,17 @@ public class KVMessage{
 		return value;
 	}
 	
-	public boolean getStatus(){
+/*	public boolean getStatus(){
 		return status;
-	}
+	}*/
 	
 	public String getMessage(){
 		return message;
 	}
 	
-	public boolean getIsPutResp(){
+/*	public boolean getIsPutResp(){
 		return isPutResp;
-	}
+	}*/
 	
 	public boolean hasEmptyKey(){
 		return (key == null | key.length() == 0 | key.isEmpty());
@@ -159,7 +165,7 @@ public class KVMessage{
 	 * http://www.mkyong.com/java/how-to-read-xml-file-in-java-dom-parser/
 	 * @param input
 	 */	
-	public KVMessage(InputStream input) throws KVException{
+	public KVMessage(InputStream input) throws KVException, SocketTimeoutException{
 			DocumentBuilderFactory docBuilderFactory = DocumentBuilderFactory.newInstance();
 			DocumentBuilder docBuilder;
 			try {
@@ -170,6 +176,8 @@ public class KVMessage{
 			Document doc = null;
 			try {
 				doc = docBuilder.parse(new NoCloseInputStream(input));
+			} catch (SocketTimeoutException e){
+				throw e;
 			} catch (SAXException e) {
 				throw new KVException(new KVMessage("XML Error: Received unparseable message"));
 			} catch (IOException e) {
@@ -187,12 +195,12 @@ public class KVMessage{
 
 			msgType = typeElement.getAttribute("type");
 			if (msgType.equals("resp")){ // KVMessage is an incoming response from the server
-				NodeList statusList = typeElement.getElementsByTagName("Status");
+/*				NodeList statusList = typeElement.getElementsByTagName("Status");
 				if (statusList.getLength() != 0){ 
 					String temp = getTagValue("Status", typeElement);
 					if (temp.equals("True")){ status = true;}
 					else{ status = false;}
-				}
+				}*/
 				
 				NodeList messageList = typeElement.getElementsByTagName("Message");
 				if (messageList.getLength() != 0){ 
@@ -202,7 +210,10 @@ public class KVMessage{
 					value = getTagValue("Value", typeElement);
 				}
 				
-			} else { // KVMessage is an outgoing message to the server
+			} if(msgType.equals("getEnKey")){
+				// done
+				return;
+			}	else { // KVMessage is an outgoing message to the server
 				key = getTagValue("Key", typeElement);
 				NodeList valueList = typeElement.getElementsByTagName("Value");
 				if (valueList.getLength() != 0){
@@ -259,7 +270,7 @@ public class KVMessage{
                 text = doc.createTextNode(value);
                 valueElement.appendChild(text);
             }
-            if (isPutResp){
+/*            if (isPutResp){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Status");
                 root.appendChild(valueElement);
@@ -268,7 +279,7 @@ public class KVMessage{
                 if (status) text = doc.createTextNode("True");
                 else text = doc.createTextNode("False");
                 valueElement.appendChild(text);
-            }
+            }*/
             if (message != null){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Message");
@@ -306,7 +317,7 @@ public class KVMessage{
             rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
             //print xml
-            //System.out.println("Here's the xml:\n\n" + rtn);
+            System.out.println("Here's the xml:\n\n" + rtn);
 		return rtn;
 	}
 	
@@ -386,7 +397,7 @@ public class KVMessage{
 	/** utility function that receives a KVMessage across a socket
 	 * @param socket
 	 */
-	public static KVMessage receiveMessage(Socket connection) throws KVException {
+	public static KVMessage receiveMessage(Socket connection) throws KVException, SocketTimeoutException {
 		InputStream in = null;
 		KVMessage rtn = null;
 		

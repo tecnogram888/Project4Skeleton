@@ -49,6 +49,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private TPCLog<K, V> tpcLog = null;
 
 	private boolean ignoreNext = false;
+	private long SlaveID = -1;
 
 	private Hashtable<K, ReentrantReadWriteLock> accessLocks = 
 			new Hashtable<K, ReentrantReadWriteLock>();
@@ -73,10 +74,16 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	public void handle(Socket master) throws IOException {
 
 		//TODO SOLOMON: ARE THERE ANY LOCKS IN HANDLE? I THINK THERE AREN'T, BUT CAN YOU DOUBLE-CHECK?
+		
+		// assume master is immortal
+		// TODO uncommen line below
+		// master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 
-		if(!inputMessage.getMsgType().equals("getreq")) tpcLog.appendAndFlush(inputMessage);
+		if(!inputMessage.getMsgType().equals("getreq") && 
+				!inputMessage.getMsgType().equals("ignoreNext"))
+			tpcLog.appendAndFlush(inputMessage);
 
 		switch (TPCState) {
 
@@ -92,6 +99,15 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					break;
 				}
 			} else if (inputMessage.getMsgType().equals("putreq")){
+				if (ignoreNext == true){
+					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					ignoreNext = false;
+					TPCStateLock.lock();
+					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
+					break;
+				}
 				try {
 					threadpool.addToQueue(new putRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
@@ -101,16 +117,29 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 			} else if (inputMessage.getMsgType().equals("delreq")){
+				if (ignoreNext == true){
+					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					ignoreNext = false;
+					TPCStateLock.lock();
+					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
+					break;
+				}
 				try {
 					threadpool.addToQueue(new delRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
@@ -119,19 +148,29 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
+			} if (inputMessage.getMsgType().equals("ignoreNext")){
+				ignoreNext = true;
+				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
+				TPCMessage.sendMessage(master, response);
+				return;
 			} else {
 				// this should not happen.
-				// TOOD DOUBLE-CHECK
+				// TODO DOUBLE-CHECK
 				System.err.println("TPCMasterHandler in NOSTATE, but didn't get a getreq, putreq, or delreq");
+				TPCMaster.exit();
 				break;
 			}
 
@@ -139,12 +178,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
 				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+				TPCMaster.exit();
 			}
 
 			if (inputMessage.getMsgType().equals("commit")){
+				TPCStateLock.lock();
 				TPCState = EState.COMMIT;
+				TPCStateLock.unlock();
 			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCStateLock.lock();
 				TPCState = EState.ABORT;
+				TPCStateLock.unlock();
 			}
 			try {
 				threadpool.addToQueue(new putRunnable<K,V>(
@@ -154,10 +198,12 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			} catch (InterruptedException e) {
 				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had an InterruptedException");
+				TPCMaster.exit();
 				return;
 			} catch (KVException e){
 				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had a KVException: " + e.getMsg().getMessage());
+				TPCMaster.exit();
 				return;
 			}
 
@@ -166,11 +212,15 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
 				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
 			}
-
+			
 			if (inputMessage.getMsgType().equals("commit")){
+				TPCStateLock.lock();
 				TPCState = EState.COMMIT;
+				TPCStateLock.unlock();
 			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCStateLock.lock();
 				TPCState = EState.ABORT;
+				TPCStateLock.unlock();
 			}
 			
 			try {
@@ -284,18 +334,24 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else if (!checkValue(message.getValue())){
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else{
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					TPCMessage.sendMessage(master, readyMessage);					
+					TPCMessage.sendMessage(master, readyMessage);		
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 			case COMMIT:
@@ -303,18 +359,22 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					keyserver.put(key, value);
 				} catch (KVException e) {
 					System.err.println("put COMMIT failed");
-					break;
+					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;	
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			default:
 				// this should pretty much should NEVER happen
@@ -359,10 +419,11 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (!checkKey(message.getKey())){
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else {
-
 					// test to see if key is actually inside the server
 					try {
 						keyserver.get(key);
@@ -370,13 +431,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						// this means that key is not inside of keyserver
 						TPCMessage abortMessage = new TPCMessage("abort", "Key doesn't exist", message.getTpcOpId(), false);
 						TPCMessage.sendMessage(master, abortMessage);
+						TPCStateLock.lock();
 						TPCState = EState.DEL_WAIT;
+						TPCStateLock.unlock();
 						break;
 					}
 
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
 					TPCMessage.sendMessage(master, readyMessage);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 
@@ -390,18 +455,22 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (KVException e) {
 					// this breaks the correctness constraint
 					System.err.println("Delete COMMIT failed when it wasn't supposed to");
-					break;
+					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			default:
 				// this should pretty much should NEVER happen
