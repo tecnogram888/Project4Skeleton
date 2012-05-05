@@ -400,6 +400,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		TPCState = EState.INIT;
 		TPCStateLock.unlock();
 
+		// add two processTPCOpRunnables to threadpool, one for each slaveServer that’s storing the key
 		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(TPCmess.getKey()));
 		SlaveInfo successor = findSuccessor(firstReplica);
 		Boolean b1 = new Boolean(false);
@@ -432,7 +433,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			} else {
 				masterCache.del((K) TPCMessage.decodeObject(TPCmess.getKey()));
 			}
-		} else{
+		} else {
 			// find the replica that aborted and return its error message
 			if (((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage().equals("ready")){
 				throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()));
@@ -509,13 +510,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				accessLock.writeLock().lock();
 				masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
 				accessLock.writeLock().unlock();
+				accessLock.readLock().unlock();
 				return value;
 			}
 			if (value == null){
+				accessLock.readLock().unlock();
 				throw new KVException(((getRunnable<K,V>) tempGetRunnable).getMessage());
 			}
 		}
-		accessLock.writeLock().unlock();
+		accessLock.readLock().unlock();
 		return value;
 	}
 
