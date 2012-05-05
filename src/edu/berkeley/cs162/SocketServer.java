@@ -63,8 +63,13 @@ public class SocketServer {
 	}
 
 	public void connect() throws IOException {
-		this.server = new ServerSocket(0);
-		this.port = server.getLocalPort();
+		if (port == -1){
+			this.server = new ServerSocket(0);
+			this.port = server.getLocalPort();
+		} else {
+			this.server = new ServerSocket(port);
+		}
+
 	}
 	
 	/**
