@@ -106,7 +106,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					TPCMaster.this.threadpool.startPool();
 
 				TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
-				
+
 				TPCMessage.sendMessage(client, msg);
 			}
 		}
@@ -404,10 +404,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		SlaveInfo successor = findSuccessor(firstReplica);
 		Boolean b1 = new Boolean(false);
 		Boolean b2 = new Boolean(false);
-		
+
 		Runnable firstReplicaRunnable = new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2);
 		Runnable successorRunnable = new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1);
-		
+
 		try {
 			threadpool.addToQueue(firstReplicaRunnable);
 			threadpool.addToQueue(successorRunnable);
@@ -431,19 +431,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						(V) TPCMessage.encodeObject(TPCmess.getValue()));
 			} else {
 				masterCache.del((K) TPCMessage.decodeObject(TPCmess.getKey()));
-				
-				// find the replica that aborted and return its error message
-				if (((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage().equals("ready")){
-					throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()));
-				} else if (((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage().equals("ready")){
-					throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()));
-				} else {
-					// they both aborted
-					throw new KVException(new KVMessage(
-							"@"+firstReplica.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()+
-							"\n@"+successor.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()
-							));
-				}
+			}
+		} else{
+			// find the replica that aborted and return its error message
+			if (((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage().equals("ready")){
+				throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()));
+			} else if (((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage().equals("ready")){
+				throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()));
+			} else {
+				// they both aborted
+				throw new KVException(new KVMessage(
+						"@"+firstReplica.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()+
+						"\n@"+successor.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()
+						));
 			}
 		}
 		accessLock.writeLock().unlock();
