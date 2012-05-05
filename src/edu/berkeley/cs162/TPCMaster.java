@@ -426,28 +426,51 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		SlaveInfo successor = findSuccessor(firstReplica);
 		Boolean b1 = new Boolean(false);
 		Boolean b2 = new Boolean(false);
-		threadpool.addToQueue(
-				new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2));
-		threadpool.addToQueue(
-				new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1));
-		while (!(b1 && b2)){
-			b1.wait();
+		
+		Runnable firstReplicaRunnable = new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2);
+		Runnable successorRunnable = new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1);
+		
+		try {
+			threadpool.addToQueue(firstReplicaRunnable);
+			threadpool.addToQueue(successorRunnable);
+
+			while (!(b1 && b2)){
+				b1.wait();
+			}
+		} catch (InterruptedException e) {
+			// should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
 		}
 
 		boolean success = (TPCState == EState.COMMIT);
+		TPCStateLock.lock();
 		TPCState = EState.NOSTATE;
+		TPCStateLock.unlock();
 		if (success) {
-			if ("putreq".equals(msg.getMsgType())) {
-				masterCache.put((K) KVMessage.decodeObject(TPCmess.getKey()), 
-						(V) KVMessage.encodeObject(TPCmess.getValue()));
+			if (TPCmess.getMsgType().equals("putreq")){
+				masterCache.put((K) TPCMessage.decodeObject(TPCmess.getKey()), 
+						(V) TPCMessage.encodeObject(TPCmess.getValue()));
 			} else {
-				masterCache.del((K) KVMessage.decodeObject(TPCmess.getKey()) );
+				masterCache.del((K) TPCMessage.decodeObject(TPCmess.getKey()));
+				
+				// find the replica that aborted and return its error message
+				if (((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage().equals("ready")){
+					throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()));
+				} else if (((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage().equals("ready")){
+					throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()));
+				} else {
+					// they both aborted
+					throw new KVException(new KVMessage(
+							"@"+firstReplica.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()+
+							"\n@"+successor.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()
+							));
+				}
 			}
 		}
 		accessLock.writeLock().unlock();
 		transactionLock.unlock();
 		return success;
-
 	}
 
 	/**
@@ -480,39 +503,39 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		V value = masterCache.get((K) KVMessage.decodeObject(msg.getKey()));
 
 		if (value == null) {
-				SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
-				SlaveInfo successor = findSuccessor(firstReplica);
-				Runnable tempGetRunnable = new getRunnable<K,V>(msg, firstReplica, successor, value);
-				try {
-					threadpool.addToQueue(tempGetRunnable);
-				} catch (InterruptedException e) {
-					// should not happen
-					e.printStackTrace();
-					TPCMaster.exit();
-				}
-				// TODO DOUG sleeping on threads
-				// value somehow gets set to the proper value
-				synchronized (tempGetRunnable) {
-					while(((getRunnable<K,V>) tempGetRunnable).getFinished() == false)
-						try {
-							tempGetRunnable.wait();
-						} catch (InterruptedException e) {
-							// should not happen
-							e.printStackTrace();
-							TPCMaster.exit();
-						}
-				}
-				value = ((getRunnable<K,V>) tempGetRunnable).getValue();
-				if (value != null) {
-					// put into cache
-					accessLock.writeLock().lock();
-					masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
-					accessLock.writeLock().unlock();
-					return value;
-				}
-				if (value == null){
-					throw new KVException(((getRunnable<K,V>) tempGetRunnable).getMessage());
-				}
+			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
+			SlaveInfo successor = findSuccessor(firstReplica);
+			Runnable tempGetRunnable = new getRunnable<K,V>(msg, firstReplica, successor, value);
+			try {
+				threadpool.addToQueue(tempGetRunnable);
+			} catch (InterruptedException e) {
+				// should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+			// TODO DOUG sleeping on threads
+			// value somehow gets set to the proper value
+			synchronized (tempGetRunnable) {
+				while(((getRunnable<K,V>) tempGetRunnable).getFinished() == false)
+					try {
+						tempGetRunnable.wait();
+					} catch (InterruptedException e) {
+						// should not happen
+						e.printStackTrace();
+						TPCMaster.exit();
+					}
+			}
+			value = ((getRunnable<K,V>) tempGetRunnable).getValue();
+			if (value != null) {
+				// put into cache
+				accessLock.writeLock().lock();
+				masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
+				accessLock.writeLock().unlock();
+				return value;
+			}
+			if (value == null){
+				throw new KVException(((getRunnable<K,V>) tempGetRunnable).getMessage());
+			}
 		}
 		accessLock.writeLock().unlock();
 		return value;
@@ -536,7 +559,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		SlaveInfo successor;
 		V value;
 		boolean finished;
-		
+
 
 		public V getValue() {
 			return this.value;
@@ -545,7 +568,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		public boolean getFinished() {
 			return this.finished;
 		}
-		
+
 		public KVMessage getMessage(){
 			return this.message;
 		}
@@ -566,9 +589,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			TPCMessage tpcMessage = new TPCMessage(message, tpcOpId.toString());
 			// make sure I don't accidentally use the KVMessage again;
 			message = null;
-			
-			slaveAnswer = sendReceiveSlave(slaveServer, tpcMessage);
-			
+
+			slaveAnswer = sendReceiveSlaveGET(slaveServer, tpcMessage);
+
 			if (slaveAnswer.getValue() != null){ // first slave sent back a good put response
 				try {
 					value = (V) TPCMessage.encodeObject(slaveAnswer.getValue());
@@ -587,8 +610,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				message = slaveAnswer;
 
 				// contact Successor
-				slaveAnswer = sendReceiveSlave(slaveServer, tpcMessage);
-				
+				slaveAnswer = sendReceiveSlaveGET(slaveServer, tpcMessage);
+
 				if (slaveAnswer.getValue() != null){ // successor slave sent back a good put response
 					try {
 						value = (V) TPCMessage.encodeObject(slaveAnswer.getValue());
@@ -615,14 +638,14 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				System.err.println("getreq: first slave didn't have a value or a message");
 				TPCMaster.exit();
 			}
-			
+
 			// do housekeeping before returning
 			this.finished = true;
 			this.notifyAll();
 			return;
 		}
 
-		public TPCMessage sendReceiveSlave(SlaveInfo slave, TPCMessage getRequest){
+		public TPCMessage sendReceiveSlaveGET(SlaveInfo slave, TPCMessage getRequest){
 			TPCMessage slaveAnswer = null;
 
 			// create new slave Socket
@@ -673,6 +696,347 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			return slaveAnswer;
 		}
 	}
+
+	class processTPCOpRunnable<K extends Serializable, V extends Serializable>implements Runnable {
+		TPCMessage message;
+		TPCMessage response;
+		SlaveInfo slaveServerInfo;
+
+		Boolean b1, b2;
+
+		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo, Boolean _b1, Boolean _b2){
+			this.message = msg;
+			this.slaveServerInfo = slaveServerInfo;
+			this.b1 = _b1;
+			this.b2 = _b2;
+		}
+		@Override
+		public void run() {
+			while (true) {
+				switch (TPCState) {
+
+				// send the appropriate message to client 
+				case INIT:
+					// Sanity Check
+					if (!"putreq".equals(message.getMsgType()) && !"delreq".equals(message.getMsgType())){
+						System.err.println("INIT did not get a putreq or delreq");
+						TPCMaster.exit();
+					}
+
+					b1 = false; //Set boolean to false when starting a section, true when finished.
+
+					TPCMessage slaveResponse = null;
+					try {
+						slaveResponse = sendReceiveSlaveTPC(slaveServerInfo, message);
+					} catch (SocketTimeoutException e1) {
+						// if timeout, this is equivalent to receiving an abort message
+						TPCStateLock.lock();
+						if (TPCState == EState.INIT){
+							// other thread is has not finished yet
+							TPCState = EState.ABORT;
+							TPCStateLock.unlock();
+							response = new TPCMessage(new KVMessage("Timeout Error: SlaveServer "+ slaveServerInfo.getSlaveID() +" has timed out during the first phase of 2PC"), "-1");
+							try {
+								b1 = true;
+								while (!(b1 && b2)) otherThreadDone.await();
+							} catch (InterruptedException e2) {
+								//TODO Doug how to handle this error?
+								System.err.println("INIT messed up when trying to wait");
+								e2.printStackTrace();
+								System.exit(1);
+							}
+							try {
+								TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+							} catch (IllegalMonitorStateException e3) {
+								// TODO Check if this is correct
+								// thread does not currently own the lock, so can't unlock
+								// therefore, do nothing.
+							}
+						} else {
+							// if the other thread already finished and is waiting
+							b1 = true;
+							otherThreadDone.notifyAll();
+							TPCStateLock.unlock();
+						}
+						break;
+					}
+
+					// Sanity Check
+					if (!slaveResponse.getMsgType().equals("ready") && !slaveResponse.getMsgType().equals("abort")){
+						System.err.println("getRunnable got a bad response");
+						TPCMaster.exit();
+					}
+
+					if (slaveResponse.getMsgType().equals("abort")){
+						response = new TPCMessage(new KVMessage (slaveResponse.getMessage()), "-1");
+						TPCStateLock.lock();
+						if (TPCState == EState.INIT){
+							// other thread is has not finished yet
+							TPCState = EState.ABORT;
+							TPCStateLock.unlock();
+							try {
+								b1 = true;
+								while (!(b1 && b2)) otherThreadDone.await();
+								try {
+									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+								} catch (IllegalMonitorStateException e3) {
+									// TODO Check if this is correct
+									// thread does not currently own the lock, so can't unlock
+									// therefore, do nothing.
+								}
+							} catch (InterruptedException e2) {
+								// this shouldn't happen, await should not be broken
+								System.err.println("INIT messed up when trying to wait");
+								e2.printStackTrace();
+								TPCMaster.exit();
+							}
+						} else {
+							// if the other thread already finished and is waiting
+							TPCState = EState.ABORT;
+							b1 = true;
+							otherThreadDone.notifyAll();
+							TPCStateLock.unlock();
+						}
+					} else if ("ready".equals(slaveResponse.getMsgType())){
+						response = new TPCMessage(new KVMessage ("ready"), "-1");
+						TPCStateLock.lock();
+						if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
+							b1 = true;
+							otherThreadDone.notifyAll();
+							TPCStateLock.unlock();
+						} else {
+							TPCState = EState.COMMIT;
+							TPCStateLock.unlock();
+							try {
+								b1 = true;
+								while (!(b1 && b2)) otherThreadDone.await();
+								try {
+									TPCStateLock.unlock();//Unlock after waking up, re-acquires lock after signal is called
+								} catch (IllegalMonitorStateException e3) {
+									// TODO Check if this is correct
+									// thread does not currently own the lock, so can't unlock
+									// therefore, do nothing.
+								}
+							} catch (InterruptedException e) {
+								// this shouldn't happen, await should not be broken
+								System.err.println("INIT messed up when trying to wait");
+								e.printStackTrace();
+								TPCMaster.exit();
+							}
+						}
+					} else {
+						// this should not happen
+						System.err.println("Coordinator did not get a ready or abort response");
+						TPCMaster.exit();
+					}
+
+				case ABORT:
+					TPCMessage abortMessage = new TPCMessage("abort", message.getTpcOpId());
+					TPCMessage abortAck;
+					b1 = false; //False at start of section
+					try {
+						abortAck = sendReceiveSlaveTPC(slaveServerInfo, abortMessage);
+						// check to see if response is ready or abort
+						if (!"ack".equals(abortAck.getMsgType())){
+							// should not happen
+							System.err.println("ABORT did not get a correct ack");
+							TPCMaster.exit();
+						}
+						// it is an ack, so we're done.
+					} catch (SocketTimeoutException e) {
+						// if timeout, then resend
+						// this ONLY breaks out of the switch, not the while loop
+						break;
+					}
+					b1 = true;//Finished Abort section
+					otherThreadDone.notifyAll();
+					return;
+
+				case COMMIT:
+					TPCMessage commitMessage = new TPCMessage("commit", message.getTpcOpId());
+					TPCMessage commitAck;
+					b1 = false;//Start of section
+					try {
+						commitAck = sendReceiveSlaveTPC(slaveServerInfo, commitMessage);
+					} catch (SocketTimeoutException e) {
+						// if timeout, then resend
+						// this ONLY breaks out of the switch, not the while loop
+						break;
+					}
+					if (!"ack".equals(commitAck.getMsgType())){
+						//TODO Doug how to handle this error?
+						System.err.println("COMMIT did not get a correct ack");
+						System.exit(1);
+					}
+					// it is an ack, so we're done.
+					b1 = true; //Finished Commit section
+					otherThreadDone.notifyAll();
+					return;
+				}
+			}
+		}
+		public TPCMessage sendReceiveSlaveTPC(SlaveInfo slave, TPCMessage opRequest) throws SocketTimeoutException{
+			TPCMessage slaveResponse = null;
+			// send the request to the slaveServer
+
+			// create new slave Socket
+			Socket slaveSocket = null;
+			try {
+				slaveSocket = new Socket(slaveServerInfo.hostName, slaveServerInfo.port);
+			} catch (UnknownHostException e) {
+				// should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			} catch (IOException e) {
+				// should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+
+			// set timeout
+			try {
+				slaveSocket.setSoTimeout(TIMEOUT_MILLISECONDS);
+			} catch (SocketException e) {
+				// could not set timeout, should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+
+			// send the put/get request to slave
+			TPCMessage.sendMessage(slaveSocket, opRequest);
+
+			// receive a response from slave
+			// Correctness Constraint: slaveAnswer is either a ready response or an abort response
+			try {
+				slaveResponse = TPCMessage.receiveMessage(slaveSocket);
+			} catch (SocketTimeoutException e) {
+				throw e;
+			}
+			return slaveResponse;
+		}
+
+		public TPCMessage getResponse(){
+			return response;
+		}
+	}
+
+	/*		response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+				} catch (KVException e) {
+					//TODO Doug is this how we should handle errors?
+					if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+						// Connection timed out
+						TPCStateLock.lock();
+						TPCState = EState.ABORT;
+						// check if other guy is sleeping, if so wake him up, if not go to sleep
+						TPCStateLock.unlock();
+						continue;
+					} else {
+						e.printStackTrace();
+					}
+			}
+			// check to see if response is ready or abort
+			if ("ready".equals(response.getMsgType())){
+				TPCStateLock.lock();
+				if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
+					b1 = true;
+					otherThreadDone.notifyAll();
+				} else {
+					TPCState = EState.COMMIT;
+					try {
+						b1 = true;
+						while (!(b1 && b2)) otherThreadDone.await();
+						TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+					} catch (InterruptedException e) {
+						//TODO Doug how to handle this error?
+						System.err.println("INIT messed up when trying to wait");
+						e.printStackTrace();
+						System.exit(1);
+					}
+				}
+			} else if ("abort".equals(response.getMsgType())){
+				TPCStateLock.lock();
+				if (TPCState == EState.INIT){
+					// other thread is has not finished yet
+					TPCState = EState.ABORT;
+					TPCStateLock.unlock();
+					try {
+						b1 = true;
+						while (!(b1 && b2)) otherThreadDone.await();
+						TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
+					} catch (InterruptedException e) {
+						//TODO Doug how to handle this error?
+						System.err.println("INIT messed up when trying to wait");
+						e.printStackTrace();
+						System.exit(1);
+					}
+				} else{
+					// if the other thread already finished and is waiting
+					b1 = true;
+					otherThreadDone.notifyAll();
+				}		
+				// check if other guy is sleeping, if so wake him up, if not go to sleep
+				TPCStateLock.unlock();
+			} else{
+				//TODO Doug How to handle this error?
+				System.err.println("Coordinator did not get a ready or abort response");
+				System.exit(1);
+			}
+
+			break;
+		case ABORT:
+			b1 = false;//False at start of section
+			try {
+				response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+				// check to see if response is ready or abort
+				if (!"ack".equals(response.getMsgType())){
+					//TODO Doug how to handle this error?
+					System.err.println("ABORT did not get a correct ack");
+					System.exit(1);
+				}
+			} catch (KVException e) {
+				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+					// Connection timed out
+					// resend
+					continue;
+				} else {
+					e.printStackTrace();
+				}
+			}
+			b1 = true;//Finished Abort section
+			otherThreadDone.notifyAll();
+			return;
+
+		case COMMIT:
+			b1 = false;//Start of section
+			try {
+				response = sendRecieveTPC(message, slaveServerInfo.hostName, slaveServerInfo.port);
+				// check to see if response is ready or abort
+				if (!"ack".equals(response.getMsgType())){
+					//TODO Doug how to handle this error?
+					System.err.println("COMMIT did not get a correct ack");
+					System.exit(1);
+				}
+			} catch (KVException e) {
+				if("Unknown Error: Could net set Socket timeout".equals(e.getMsg().getMessage())){
+					// Connection timed out
+					// resend
+					continue;
+				} else {
+					e.printStackTrace();
+				}
+			}
+			b1 = true;
+			otherThreadDone.notifyAll();
+			return;
+
+		default: 
+			return;
+		}
+	}*/
+	//
+	//}
+	//
+	//}
 
 	// Either exits or doesn't exit
 	public static void exit(){

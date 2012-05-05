@@ -25,7 +25,7 @@ public class TPCMessageTest {
 
 	@Test // tests constructor for converting a KV successful put message to a TPC message
 	public void convertKVMessage2() {
-		TPCMessage msg = new TPCMessage(new KVMessage(false, "string"), "0");
+		TPCMessage msg = new TPCMessage(new KVMessage("string"), "0");
 		assertTrue(msg.getMsgType() == "resp");
 		assertTrue(msg.getMessage() == "string");
 		assertTrue(msg.getTpcOpId() == "0");

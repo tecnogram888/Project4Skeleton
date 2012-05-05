@@ -99,7 +99,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 		this.value = inputMessage.getValue();
 //		this.status = inputMessage.getStatus();
 		this.message = inputMessage.getMessage();
-		this.isPutResp = inputMessage.getIsPutResp();
+//		this.isPutResp = inputMessage.getIsPutResp();
 		this.tpcOpId = tpcOpID;
 	}
 

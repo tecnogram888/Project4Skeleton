@@ -180,36 +180,16 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			// client will be closed at the end
 
 
-		} else if ("putreq".equals(mess.getMsgType())) {
-			// TODO DOUG ARE WE IMPLEMENTING THE STATUS FIELD?
-			boolean status = false;
+		} else if (mess.getMsgType().equals("putreq") || mess.getMsgType().equals("delreq")) {
+			boolean isPutReq = mess.getMsgType().equals("putreq");
 			try {
-				//need separate operations for put and delete
-				status = tpcMaster.performTPCOperation(mess, true);
+				tpcMaster.performTPCOperation(mess, isPutReq);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());
 				try {
 					client.close();
 				} catch (IOException e2) {
 					// These ones don't send errors, this is a server error
-					e2.printStackTrace();
-				}
-				return;
-			}
-			KVMessage message = new KVMessage(status, "Success");
-			KVMessage.sendMessage(client, message);
-
-			// client will be closed at the end
-
-
-		} else if ("delreq".equals(mess.getMsgType())) {
-			try {
-				tpcMaster.performTPCOperation(mess, false);
-			} catch (KVException e) {
-				KVMessage.sendMessage(client, e.getMsg());
-				try {
-					client.close();
-				} catch (IOException e2) {
 					e2.printStackTrace();
 				}
 				return;

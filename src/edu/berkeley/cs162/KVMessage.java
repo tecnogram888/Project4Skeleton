@@ -66,9 +66,9 @@ public class KVMessage{
 	private String msgType = null;
 	private String key = null;
 	private String value = null;
-	private boolean status = false;
+//	private boolean status = false;
 	private String message = null;
-	private boolean isPutResp = false;
+//	private boolean isPutResp = false;
 
 	public KVMessage(){
 		//do nothing
@@ -89,19 +89,19 @@ public class KVMessage{
 		this.value = null;
 	}
 	
-	//For constructing error messages and successful delete messages
+	//For constructing error messages and successful put + delete messages
 	public KVMessage(String message){
 		this.msgType = "resp";
 		this.message = message;
 	}
 	
-	//For successful put message
+/*	//For successful put message
 	public KVMessage(boolean status, String message){
 		this.status = status;
 		this.message = message;
 		this.msgType = "resp";
 		this.isPutResp = true;
-	}
+	}*/
 	
 	public String getMsgType(){
 		return msgType;
@@ -115,17 +115,17 @@ public class KVMessage{
 		return value;
 	}
 	
-	public boolean getStatus(){
+/*	public boolean getStatus(){
 		return status;
-	}
+	}*/
 	
 	public String getMessage(){
 		return message;
 	}
 	
-	public boolean getIsPutResp(){
+/*	public boolean getIsPutResp(){
 		return isPutResp;
-	}
+	}*/
 	
 	public boolean hasEmptyKey(){
 		return (key == null | key.length() == 0 | key.isEmpty());
@@ -190,12 +190,12 @@ public class KVMessage{
 
 			msgType = typeElement.getAttribute("type");
 			if (msgType.equals("resp")){ // KVMessage is an incoming response from the server
-				NodeList statusList = typeElement.getElementsByTagName("Status");
+/*				NodeList statusList = typeElement.getElementsByTagName("Status");
 				if (statusList.getLength() != 0){ 
 					String temp = getTagValue("Status", typeElement);
 					if (temp.equals("True")){ status = true;}
 					else{ status = false;}
-				}
+				}*/
 				
 				NodeList messageList = typeElement.getElementsByTagName("Message");
 				if (messageList.getLength() != 0){ 
@@ -262,7 +262,7 @@ public class KVMessage{
                 text = doc.createTextNode(value);
                 valueElement.appendChild(text);
             }
-            if (isPutResp){
+/*            if (isPutResp){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Status");
                 root.appendChild(valueElement);
@@ -271,7 +271,7 @@ public class KVMessage{
                 if (status) text = doc.createTextNode("True");
                 else text = doc.createTextNode("False");
                 valueElement.appendChild(text);
-            }
+            }*/
             if (message != null){
             	//create child element, add an attribute, and add to root
                 Element valueElement = doc.createElement("Message");
