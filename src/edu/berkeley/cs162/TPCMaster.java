@@ -1023,5 +1023,35 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	public static void exit(){
 		System.exit(1);
 	}
+	
+	public KVMessage handleIgnore (TPCMessage inputMessage){
+		Long slaveServerID = Long.decode(inputMessage.getMessage());
+		SlaveInfo slave = consistentHash.get(slaveServerID);
+		if (slave == null){
+			return new KVMessage("IgnoreNext Error: Invalid SlaveServerID");
+		}
+		Socket slaveSocket = null;
+		try {
+			slaveSocket = new Socket(slave.hostName, slave.port);
+		} catch (UnknownHostException e) {
+			// should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		} catch (IOException e) {
+			// should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		TPCMessage.sendMessage(slaveSocket, inputMessage);
+		TPCMessage response = null;
+		try {
+			response = TPCMessage.receiveMessage(slaveSocket);
+		} catch (SocketTimeoutException e) {
+			System.err.println("ignoreNext requests should time out");
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		return new KVMessage(response.getMessage());	
+	}
 
 }

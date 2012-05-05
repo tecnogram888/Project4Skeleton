@@ -49,6 +49,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private TPCLog<K, V> tpcLog = null;
 
 	private boolean ignoreNext = false;
+	private long SlaveID = -1;
 
 	private Hashtable<K, ReentrantReadWriteLock> accessLocks = 
 			new Hashtable<K, ReentrantReadWriteLock>();
@@ -80,7 +81,9 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 
-		if(!inputMessage.getMsgType().equals("getreq")) tpcLog.appendAndFlush(inputMessage);
+		if(!inputMessage.getMsgType().equals("getreq") && 
+				!inputMessage.getMsgType().equals("ignoreNext"))
+			tpcLog.appendAndFlush(inputMessage);
 
 		switch (TPCState) {
 
@@ -96,6 +99,15 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					break;
 				}
 			} else if (inputMessage.getMsgType().equals("putreq")){
+				if (ignoreNext == true){
+					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					ignoreNext = false;
+					TPCStateLock.lock();
+					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
+					break;
+				}
 				try {
 					threadpool.addToQueue(new putRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
@@ -105,16 +117,29 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 			} else if (inputMessage.getMsgType().equals("delreq")){
+				if (ignoreNext == true){
+					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
+					TPCMessage.sendMessage(master, abortMsg);
+					ignoreNext = false;
+					TPCStateLock.lock();
+					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
+					break;
+				}
 				try {
 					threadpool.addToQueue(new delRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
@@ -123,15 +148,24 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMsg);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
+			} if (inputMessage.getMsgType().equals("ignoreNext")){
+				ignoreNext = true;
+				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
+				TPCMessage.sendMessage(master, response);
+				return;
 			} else {
 				// this should not happen.
 				// TODO DOUBLE-CHECK
@@ -178,7 +212,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
 				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
 			}
-
+			
 			if (inputMessage.getMsgType().equals("commit")){
 				TPCStateLock.lock();
 				TPCState = EState.COMMIT;

@@ -86,6 +86,13 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 			KVMessage.sendMessage(client, e.getMsg());
 			return;
 		}
+		
+		if (mess.getMsgType().equals("ignoreNext")){
+			TPCMessage tpcMess = new TPCMessage(mess, "-1");
+			KVMessage result = tpcMaster.handleIgnore(tpcMess);
+			KVMessage.sendMessage(client, result);
+			return;
+		}
 
 		try {
 			threadpool.addToQueue(new processMessageRunnable<K,V>(mess, client, tpcMaster));
