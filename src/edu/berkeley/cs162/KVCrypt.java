@@ -77,7 +77,7 @@ public class KVCrypt {
                IllegalBlockSizeException {
     	String s = null;
     	try {
-			s = KVMessage.encodeObject((decipher.doFinal(encryptionBytes)));
+			s = KVMessage.encodeObject(decipher.doFinal(encryptionBytes));
 		} catch (KVException e) {
 			return null;//Is this correct? I don't want this error here...
 		}

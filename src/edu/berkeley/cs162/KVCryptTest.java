@@ -45,10 +45,20 @@ public class KVCryptTest {
 		}
 	    
 	    try {
-			String test2 = new String(cryptor.encrypt(test1));
-			String test3 = cryptor.decrypt(test2.getBytes());
-			System.out.println(test1 + " " + test3);
-			assertEquals(test1, test3);
+	    	String test11 = KVMessage.encodeObject(test1);
+	    	byte[] test12 = cryptor.encrypt(test11);
+	    	String test13 = KVMessage.encodeObject(test12);
+	    	System.out.println("1: " + test1 + " 2:" + test11 + " 3:" + test12 + " 4:" + test13);
+	    	byte[] test21 = (byte[])KVMessage.decodeObject(test13);
+	    	String test22 = cryptor.decrypt(test21);
+	    	System.out.println("1: " + test21 + " 2:" + test22);
+	    	
+	    	String d1 = "Doug";
+	    	String d2 = KVMessage.encodeObject(d1);
+	    	String d3 = (String)KVMessage.decodeObject(d2);
+	    	System.out.println(d1 + " " + d2 + " " + d3);
+	    	System.out.println(test12 + " " + test13 + " " + test21);
+	    	
 		} catch (Exception e) {
 			e.printStackTrace();
 			fail();
