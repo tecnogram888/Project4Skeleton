@@ -49,16 +49,6 @@ public class TPCMessageTest {
 		assertTrue(msg.getTpcOpId() == "0");
 	}
 
-	@Test // tests constructor for tpc log ready
-	public void TPCLogReady() {
-		TPCMessage msg = new TPCMessage("type", "key", "value", "message", "0");
-		assertTrue(msg.getMsgType() == "type");
-		assertTrue(msg.getKey() == "key");
-		assertTrue(msg.getValue() == "value");
-		assertTrue(msg.getMessage() == "message");
-		assertTrue(msg.getTpcOpId() == "0");
-	}
-
 	@Test // tests constructor for tpc put and tpc log del messages
 	public void TPCPut() { 
 		TPCMessage msg = new TPCMessage("putreq", "key", "value", "0");
@@ -85,7 +75,7 @@ public class TPCMessageTest {
 		assertTrue(msg2.getTpcOpId() == "0");
 	}
 
-	@Test
+	@Test //tests constructor for 2PC Put requests
 	public void Test2pcPUTReq() {
 		BasicAttribute keyTest = new BasicAttribute("key");
 		BasicAttribute valueTest = new BasicAttribute("value");
@@ -130,7 +120,7 @@ public class TPCMessageTest {
 		assertEquals(x, xml);
 	}
 
-	@Test
+	@Test //tests contructor for 2PC Del Requests
 	public void Test2pcDELReq() {
 		BasicAttribute keyTest = new BasicAttribute("key");
 		TPCMessage test = null;
@@ -172,7 +162,7 @@ public class TPCMessageTest {
 		assertEquals(x, xml);
 	}
 
-	@Test
+	@Test //tests constructor for 2PC Ready response
 	public void Test2pcREADYresp() {
 		TPCMessage test = new TPCMessage("ready","2PC Operation ID");
 		assertTrue(test.getMsgType() == "ready");
@@ -193,7 +183,285 @@ public class TPCMessageTest {
 				"</KVMessage>\n";
 		assertEquals(x, xml);
 	}
+	
+	@Test //tests constructor for 2PC Abort response
+	public void Test2pcAbortresp() {
+		TPCMessage test = new TPCMessage("abort", "Error Message", "2PC Operation ID", false);
+		assertTrue(test.getMsgType() == "abort");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == "Error Message");
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"abort\">\n" + 
+				"<Message>Error Message</Message>\n" + 
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}
 
+	@Test //tests constructor for 2PC Commit response
+	public void Test2pcCommitresp() {
+		TPCMessage test = new TPCMessage("commit", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "commit");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"commit\">\n" +  
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}
+
+	@Test //tests constructor for 2PC Abort Decision
+	public void Test2pcAbortDecision() {
+		TPCMessage test = new TPCMessage("abort", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "abort");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"abort\">\n" + 
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}
+	
+	@Test //tests constructor for acknowledgement
+	public void Test2pcAck() {
+		TPCMessage test = new TPCMessage("ack", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "ack");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"ack\">\n" + 
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}
+
+	@Test //tests constructor for 2PC Registration Message
+	public void Test2PCRegister() {
+		TPCMessage test = new TPCMessage("register", "SlaveServerID@HostName:Port");
+		assertTrue(test.getMsgType() == "register");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == "SlaveServerID@HostName:Port");
+		assertTrue(test.getTpcOpId() == null);
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"register\">\n" + 
+				"<Message>SlaveServerID@HostName:Port</Message>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}    
+
+	@Test //tests constructor for 2PC Registration Acknowledgement
+	public void TestRegistrationResp() {
+		TPCMessage test = new TPCMessage("resp", "Successfully registered SlaveServerID@HostName:Port");
+		assertTrue(test.getMsgType() == "resp");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == "Successfully registered SlaveServerID@HostName:Port");
+		assertTrue(test.getTpcOpId() == null);
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"resp\">\n" + 
+				"<Message>Successfully registered SlaveServerID@HostName:Port</Message>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	}    
+
+	@Test //tests constructor for 2PCLog Put
+	public void TestTPCLogPut() {
+		TPCMessage test = new TPCMessage("ready", "key", "value", "putreq", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "ready");
+		assertTrue(test.getKey() == "key");
+		assertTrue(test.getValue() == "value");
+		assertTrue(test.getMessage() == "putreq");
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"ready\">\n" +
+				"<Key>key</Key>\n" +
+				"<Value>value</Value>\n" + 
+				"<Message>putreq</Message>\n" +
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 
+
+	@Test //tests constructor for 2PCLog Delete
+	public void TestTPCLogDel() {
+		TPCMessage test = new TPCMessage("ready", "key", "delreq", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "ready");
+		assertTrue(test.getKey() == "key");
+		assertTrue(test.getValue() == null );
+		assertTrue(test.getMessage() == "delreq");
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"ready\">\n" +
+				"<Key>key</Key>\n" +
+				"<Message>delreq</Message>\n" +
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 
+
+	@Test //tests constructor for 2PCLog Abort
+	public void TestTPCLogAbort() {
+		TPCMessage test = new TPCMessage("abort", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "abort");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"abort\">\n" +
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 
+
+
+	@Test //tests constructor for 2PCLog Commit
+	public void TestTPCCommit() {
+		TPCMessage test = new TPCMessage("commit", "2PC Operation ID");
+		assertTrue(test.getMsgType() == "commit");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == "2PC Operation ID");
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"commit\">\n" +
+				"<TPCOpId>2PC Operation ID</TPCOpId>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 
+
+	
+	@Test //tests constructor for Encryption Key request
+	public void TestEncryptionKey() {
+		System.out.println("in encrypt");
+		TPCMessage test = new TPCMessage("getEnKey");
+		assertTrue(test.getMsgType() == "getEnKey");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == null);
+		assertTrue(test.getTpcOpId() == null);
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"getEnKey\">\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 	
+	
+//    Server response
+//    <?xml version="1.0" encoding="UTF-8"?>
+//    <KVMessage type="resp">
+//    <Message>Encryption Key</Message>
+//    </KVMessage>
+
+	@Test //tests constructor for server response
+	public void TestServerResponse() {
+		TPCMessage test = new TPCMessage("resp", "Encryption Key");
+		assertTrue(test.getMsgType() == "resp");
+		assertTrue(test.getKey() == null);
+		assertTrue(test.getValue() == null);
+		assertTrue(test.getMessage() == "Encryption Key");
+		assertTrue(test.getTpcOpId() == null);
+		String xml = null;
+		try {
+			xml = test.toXML();
+		} catch (KVException e) {
+			e.printStackTrace();
+			fail();
+		}
+		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
+				+ "<KVMessage type=\"resp\">\n" +
+				"<Message>Encryption Key</Message>\n" +
+				"</KVMessage>\n";
+		assertEquals(x, xml);
+	} 	
+	
 	/*	@Test // tests sending a message
 	public void sendTPCMessageTest() {
 		ServerSocket server = null;
