@@ -210,7 +210,10 @@ public class KVMessage{
 					value = getTagValue("Value", typeElement);
 				}
 				
-			} else { // KVMessage is an outgoing message to the server
+			} if(msgType.equals("getEnKey")){
+				// done
+				return;
+			}	else { // KVMessage is an outgoing message to the server
 				key = getTagValue("Key", typeElement);
 				NodeList valueList = typeElement.getElementsByTagName("Value");
 				if (valueList.getLength() != 0){
@@ -314,7 +317,7 @@ public class KVMessage{
             rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
             //print xml
-            //System.out.println("Here's the xml:\n\n" + rtn);
+            System.out.println("Here's the xml:\n\n" + rtn);
 		return rtn;
 	}
 	
