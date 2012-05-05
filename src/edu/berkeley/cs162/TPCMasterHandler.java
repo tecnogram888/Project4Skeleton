@@ -148,9 +148,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			}
 
 			if (inputMessage.getMsgType().equals("commit")){
+				TPCStateLock.lock();
 				TPCState = EState.COMMIT;
+				TPCStateLock.unlock();
 			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCStateLock.lock();
 				TPCState = EState.ABORT;
+				TPCStateLock.unlock();
 			}
 			try {
 				threadpool.addToQueue(new putRunnable<K,V>(
@@ -176,9 +180,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			}
 
 			if (inputMessage.getMsgType().equals("commit")){
+				TPCStateLock.lock();
 				TPCState = EState.COMMIT;
+				TPCStateLock.unlock();
 			} else if (inputMessage.getMsgType().equals("abort")){
+				TPCStateLock.lock();
 				TPCState = EState.ABORT;
+				TPCStateLock.unlock();
 			}
 			
 			try {
@@ -292,18 +300,24 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else if (!checkValue(message.getValue())){
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else{
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					TPCMessage.sendMessage(master, readyMessage);					
+					TPCMessage.sendMessage(master, readyMessage);		
+					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 			case COMMIT:
@@ -311,18 +325,22 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					keyserver.put(key, value);
 				} catch (KVException e) {
 					System.err.println("put COMMIT failed");
-					break;
+					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;	
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			default:
 				// this should pretty much should NEVER happen
@@ -367,10 +385,11 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (!checkKey(message.getKey())){
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
 					TPCMessage.sendMessage(master, abortMessage);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				} else {
-
 					// test to see if key is actually inside the server
 					try {
 						keyserver.get(key);
@@ -378,13 +397,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						// this means that key is not inside of keyserver
 						TPCMessage abortMessage = new TPCMessage("abort", "Key doesn't exist", message.getTpcOpId(), false);
 						TPCMessage.sendMessage(master, abortMessage);
+						TPCStateLock.lock();
 						TPCState = EState.DEL_WAIT;
+						TPCStateLock.unlock();
 						break;
 					}
 
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
 					TPCMessage.sendMessage(master, readyMessage);
+					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
+					TPCStateLock.unlock();
 					break;
 				}
 
@@ -398,18 +421,22 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (KVException e) {
 					// this breaks the correctness constraint
 					System.err.println("Delete COMMIT failed when it wasn't supposed to");
-					break;
+					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
 				TPCMessage.sendMessage(master, ackMessage);
+				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
+				TPCStateLock.unlock();
 				break;
 			default:
 				// this should pretty much should NEVER happen
