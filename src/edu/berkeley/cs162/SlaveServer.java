@@ -93,7 +93,7 @@ public class SlaveServer {
 		// Register with the Master
 		// implement me
 		Socket register = null;
-		TPCMessage regAck = null;
+		TPCMessage regMsg = null;
 		try {
 			register = new Socket(masterHostName, masterPort);
 		} catch(UnknownHostException e) {
@@ -101,21 +101,27 @@ public class SlaveServer {
 		} catch(IOException e) {
 			System.err.println("could not create socket");
 		}
-		
 		try {
 			register.setSoTimeout(5000);
 		} catch (SocketException e) {
 			System.err.println("could not set socket timeout");
 		}
 		
+		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+masterPort);
+		TPCMessage.sendMessage(register, regMsg);
 		
-		regAck = new TPCMessage(slaveID+"@"+masterHostName+":"+masterPort);
-		TPCMessage.sendMessage(register, regAck);
-		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort) {
+		TPCMessage regAck = null;
+		// read registration ACK from TPCMaster
+		try {
+			regAck = new TPCMessage(register.getInputStream());
+		} catch (KVException e) {
+			System.err.println("error reading registration message");
+		} catch (IOException e) {
+			System.err.println("error reading input stream");
+		}//TODO How to handle these errors?
+		
+		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort)
 			System.err.println("could not successfully register");
-		} else {
-			// TODO sys.log -> successfully registered?
-		}
 	}
 
 }

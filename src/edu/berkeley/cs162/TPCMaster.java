@@ -76,9 +76,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				this.client = _client;
 			}
 			public void run(){
-				PrintWriter out = null;
-				// TODO in is not used...
-				InputStream in = null;
 				SlaveInfo newSlave = null;
 				TPCMessage registration = null;
 
@@ -90,33 +87,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					System.err.println("error reading registration message");
 				} catch (IOException e) {
 					System.err.println("error reading input stream");
-				}//TODO How to handle these errors?
+				} //TODO How to handle these errors?
 
 				addToConsistentHash(newSlave);
 				if (consistentHash.size() >= listOfSlaves.length)
 					TPCMaster.this.threadpool.startPool();
 
-				try {
-					out = new PrintWriter(client.getOutputStream(), true);
-				} catch (IOException e) {
-					System.err.println("could not get slave's outputstream");
-				}
 				TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
-				String xmlFile = null;
-				try {
-					xmlFile = msg.toXML();
-				} catch (KVException e) {
-					System.err.println("could not convert TPCMessage to XML");
-				}
-				out.println(xmlFile);
-				try {
-					client.shutdownOutput();
-					// added by luke
-					client.close();
-					out.close();
-				} catch (IOException e) {
-					System.err.println("could not shutdown client ouptut");
-				}
+				
+				TPCMessage.sendMessage(client, msg);
 			}
 		}
 		@Override
@@ -127,47 +106,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				// TODO How to handle this error?
 				e.printStackTrace();
 			}
-			//			PrintWriter out = null;
-			//			// TODO in is not used...
-			//			InputStream in = null;
-			//			SlaveInfo newSlave = null;
-			//			TPCMessage registration = null;
-			//
-			//			// read registration message from SlaveServer
-			//			try {
-			//				registration = new TPCMessage(client.getInputStream());
-			//				newSlave = new SlaveInfo(registration.getMessage());
-			//			} catch (KVException e) {
-			//				System.err.println("error reading registration message");
-			//			}
-			//
-			//			addToConsistentHash(newSlave);
-			//			synchronized(consistentHash){
-			//			if (consistentHash.size() >= listOfSlaves.length)//TODO Changed this to >= from ==, this is slightly safer, no?
-			//				consistentHash.notify();
-			//			}
-			//
-			//			try {
-			//				out = new PrintWriter(client.getOutputStream(), true);
-			//			} catch (IOException e) {
-			//				System.err.println("could not get slave's outputstream");
-			//			}
-			//			TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
-			//			String xmlFile = null;
-			//			try {
-			//				xmlFile = msg.toXML();
-			//			} catch (KVException e) {
-			//				System.err.println("could not convert TPCMessage to XML");
-			//			}
-			//			out.println(xmlFile);
-			//			try {
-			//				client.shutdownOutput();
-			//				// added by luke
-			//				client.close();
-			//				out.close();
-			//			} catch (IOException e) {
-			//				System.err.println("could not shutdown client ouptut");
-			//			}
 		}
 	}
 
