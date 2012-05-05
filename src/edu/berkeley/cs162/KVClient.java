@@ -73,11 +73,15 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 			crypt.setCipher();
 			crypt.setUp();
 		} catch (KVException e) {
-			// TODO How to handle this? The system is broken at this point... Maybe retry?
+			// TODO
+			// this just shouldn't happen
 			e.printStackTrace();
+			TPCMaster.exit();
 		} catch (Exception e) {
-			// TODO How to handle this? The system is broken at this point... Maybe retry?
+			// TODO
+			// this just shouldn't happen
 			e.printStackTrace();
+			TPCMaster.exit();
 		}
 		
 	}
@@ -105,7 +109,7 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 			throw new KVException(new KVMessage("Network Error: Could not create socket"));
 		}
 		try {
-			//TODO uncomment line below, assume Master is immorta
+			//TODO uncomment line below, assume Master is immortal
 			//connection.setSoTimeout(0);
 			connection.setSoTimeout(15000);
 		} catch (SocketException e1) {

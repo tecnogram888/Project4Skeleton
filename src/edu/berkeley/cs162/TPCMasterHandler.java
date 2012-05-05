@@ -59,6 +59,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	}
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
+	private TPCMessage putDelMessage;
 
 
 	public TPCMasterHandler(KeyServer<K, V> keyserver) {
@@ -84,10 +85,14 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		if(!inputMessage.getMsgType().equals("getreq") && 
 				!inputMessage.getMsgType().equals("ignoreNext"))
 			tpcLog.appendAndFlush(inputMessage);
-
+		
 		switch (TPCState) {
 
 		case NOSTATE:
+			// we have to save the message or else we won't know what to put or delete
+			// if we get a commit!
+			putDelMessage = inputMessage;
+
 			if (inputMessage.getMsgType().equals("getreq")){
 				try {
 					threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(inputMessage.getKey()), keyserver, master, inputMessage.getTpcOpId()));
@@ -190,6 +195,18 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCState = EState.ABORT;
 				TPCStateLock.unlock();
 			}
+			
+			// we have to reload the original message or else getKey() and getValue()
+			// will throw NullPointers
+			inputMessage = putDelMessage;
+			
+			//Sanity Check
+			if (!inputMessage.getMsgType().equals("putreq")){
+				// this should not happen
+				System.err.println("failed Sanity Check 1 in TPCMasterHandler");
+				TPCMaster.exit();
+			}
+			
 			try {
 				threadpool.addToQueue(new putRunnable<K,V>(
 						(K)TPCMessage.decodeObject(inputMessage.getKey()), 
@@ -221,6 +238,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCStateLock.lock();
 				TPCState = EState.ABORT;
 				TPCStateLock.unlock();
+			}
+			
+			// we have to reload the original message or else getKey()
+			// will throw NullPointer
+			inputMessage = putDelMessage;
+			
+			//Sanity Check
+			if (!inputMessage.getMsgType().equals("delreq")){
+				// this should not happen
+				System.err.println("failed Sanity Check 2 in TPCMasterHandler");
+				TPCMaster.exit();
 			}
 			
 			try {
