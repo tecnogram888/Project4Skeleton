@@ -134,8 +134,9 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				}
 			} else {
 				// this should not happen.
-				// TOOD DOUBLE-CHECK
+				// TODO DOUBLE-CHECK
 				System.err.println("TPCMasterHandler in NOSTATE, but didn't get a getreq, putreq, or delreq");
+				TPCMaster.exit();
 				break;
 			}
 
@@ -143,6 +144,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
 				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+				TPCMaster.exit();
 			}
 
 			if (inputMessage.getMsgType().equals("commit")){
@@ -158,10 +160,12 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			} catch (InterruptedException e) {
 				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had an InterruptedException");
+				TPCMaster.exit();
 				return;
 			} catch (KVException e){
 				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had a KVException: " + e.getMsg().getMessage());
+				TPCMaster.exit();
 				return;
 			}
 
