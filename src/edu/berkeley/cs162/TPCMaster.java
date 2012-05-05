@@ -239,12 +239,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		// delayed start ThreadPool
 		threadpool = new ThreadPool(10, false); //TODO: how many threads?
-
-		String hostname = InetAddress.getLocalHost().getHostName();
-		while(hostname.length()<20)
-			hostname += hostname;
-
-
 		KeyGenerator keygen = KeyGenerator.getInstance("DESede");
 		masterKey = keygen.generateKey();
 	}

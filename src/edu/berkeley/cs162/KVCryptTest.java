@@ -5,12 +5,16 @@ import static org.junit.Assert.*;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.ArrayList;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESedeKeySpec;
+
+import junit.framework.Assert;
 
 import org.junit.Test;
 
@@ -18,53 +22,43 @@ public class KVCryptTest {
 
 	@Test
 	public void testEncryptDecrypt() {
+		try{
 		KVCrypt cryptor = new KVCrypt();
 
 		DESedeKeySpec keySpec = null;
 		SecretKey dougKey = null;
-		try {
-			keySpec = new DESedeKeySpec("douglasJamesDaviesUCBerkeley".getBytes());//In the real version, use the system name?
-			SecretKeyFactory kf = SecretKeyFactory.getInstance("DESede");
-			dougKey = kf.generateSecret(keySpec);
-			} catch (InvalidKeyException e) {
-				fail();
-			} catch (NoSuchAlgorithmException e) {
-				fail();
-			} catch (InvalidKeySpecException e) {
-				fail();
-			}
+		KeyGenerator keygen = KeyGenerator.getInstance("DESede");
+		dougKey = keygen.generateKey();
+
+		cryptor.setKey(dougKey);
+		cryptor.setCipher();
+		cryptor.setUp();
 		String test1 = "Douglas James Davies";
-	    try {
-			 cryptor.setKey(dougKey);
-			 cryptor.setCipher();
-			 cryptor.setUp();
-			 
-		} catch (Exception e) {
+		System.out.println(test1);
+		String test2 = null;
+			test2 = KVMessage.encodeObject(test1);
+		System.out.println(test2);
+		byte[] test3 = null;
+		test3 = cryptor.encrypt(test2);
+		System.out.println(test3);
+		String test4 = KVMessage.encodeObject(test3);//Full encrypted/encoded
+		System.out.println(test4);
+		byte[] test5 = (byte[]) KVMessage.decodeObject(test4);//Should give back String test3
+		System.out.println(test5);
+		//assertTrue(test5.equals(test3));
+		
+		byte[] a = {1, 2, 3, 4, 5};
+		System.out.println(a);
+		byte[] b = (byte[])KVMessage.decodeObject(KVMessage.encodeObject(a));
+		System.out.println(b);
+		Assert.
+		
+		
+	
+		} catch (Exception e){
 			e.printStackTrace();
 			fail();
 		}
-	    
-	    try {
-	    	String test11 = KVMessage.encodeObject(test1);
-	    	byte[] test12 = cryptor.encrypt(test11);
-	    	String test13 = KVMessage.encodeObject(test12);
-	    	System.out.println("1: " + test1 + " 2:" + test11 + " 3:" + test12 + " 4:" + test13);
-	    	byte[] test21 = (byte[])KVMessage.decodeObject(test13);
-	    	String test22 = cryptor.decrypt(test21);
-	    	System.out.println("1: " + test21 + " 2:" + test22);
-	    	
-	    	String d1 = "Doug";
-	    	String d2 = KVMessage.encodeObject(d1);
-	    	String d3 = (String)KVMessage.decodeObject(d2);
-	    	System.out.println(d1 + " " + d2 + " " + d3);
-	    	System.out.println(test12 + " " + test13 + " " + test21);
-	    	
-		} catch (Exception e) {
-			e.printStackTrace();
-			fail();
-		}
-	    	
-	   
 	    
 	}
 

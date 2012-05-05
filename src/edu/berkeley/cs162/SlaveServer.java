@@ -77,8 +77,21 @@ public class SlaveServer {
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting SlaveServer at " + server.getHostname() + ":" + server.getPort());
-		// fix me not to block TODO
-		server.run();
+		// fix me not to block
+		// create a runnable and thread for regServer
+				class socketServerRunnable implements Runnable {
+					public void run() {
+							try {
+								server.run();
+							} catch (IOException e) {
+								// TODO Handle this as a connection error... Basically just die?
+							}
+					
+					}
+				}
+				Thread socketServerThread = new Thread(new socketServerRunnable());
+				socketServerThread.start();
+		//server.run();
 		
 		// Create TPCLog
 		logPath = slaveID + "@" + server.getHostname();
