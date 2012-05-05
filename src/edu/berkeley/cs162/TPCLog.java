@@ -159,9 +159,9 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 						} else if (nextMsg.getMsgType().equals("abort")){
 							x+=2;//do nothing
 						}
-					} else {//interrupted (msg's tpcopid is not same as nextmsg's tpcopid)
+					} else {//TPCOpID does not match
 						x++;
-						throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
+						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}
 				else if (msg.getMessage().equals("delreq")) {
@@ -176,9 +176,9 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 						} else if (nextMsg.getMsgType().equals("abort")) {
 							x+=2;//do nothing
 						}
-					} else {
+					} else { //TPCOpID does not match
 						x++;
-						throw new KVException (new KVMessage ("Error-- Don't know if commit / abort"));
+						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}
 			}
