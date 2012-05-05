@@ -34,6 +34,8 @@ import javax.crypto.BadPaddingException;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+import javax.xml.bind.DatatypeConverter;
+
 import java.security.InvalidKeyException;
 
 public class KVCrypt {
@@ -66,7 +68,7 @@ public class KVCrypt {
                BadPaddingException,
                IllegalBlockSizeException {
     	
-    	return cipher.doFinal(input.getBytes());
+    	return cipher.doFinal(DatatypeConverter.parseBase64Binary(input));
     
     }
     
@@ -75,12 +77,7 @@ public class KVCrypt {
         throws InvalidKeyException, 
                BadPaddingException,
                IllegalBlockSizeException {
-    	String s = null;
-    	try {
-			s = KVMessage.encodeObject(decipher.doFinal(encryptionBytes));
-		} catch (KVException e) {
-			return null;//Is this correct? I don't want this error here...
-		}
+    	String s = DatatypeConverter.printBase64Binary(decipher.doFinal(encryptionBytes));
     	return s;
       }
 }
