@@ -185,7 +185,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			boolean status = false;
 			try {
 				//need separate operations for put and delete
-				status = tpcMaster.performTPCOperation(mess);
+				status = tpcMaster.performTPCOperation(mess, true);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());
 				try {
@@ -204,7 +204,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 
 		} else if ("delreq".equals(mess.getMsgType())) {
 			try {
-				tpcMaster.performTPCOperation(mess);
+				tpcMaster.performTPCOperation(mess, false);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());
 				try {
