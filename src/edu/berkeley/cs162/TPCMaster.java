@@ -615,6 +615,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			this.finished = true;
 			this.notifyAll();
 			return;
+			
 		}
 
 		public TPCMessage sendReceiveSlaveGET(SlaveInfo slave, TPCMessage getRequest){

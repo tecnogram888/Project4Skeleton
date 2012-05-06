@@ -54,7 +54,7 @@ public class KVCryptTest {
 		byte[] test3 = cryptor.encrypt(test2);
 		System.out.println(test3);
 		String test4 = KVMessage.encodeObject(test3);//Full encrypted/encoded
-		System.out.println(test4);
+		System.out.println(test4);//This is the string you send to/receive from the server
 		
 		byte[] test5 = (byte[]) KVMessage.decodeObject(test4);//Should give back String test3
 		System.out.println(test5);

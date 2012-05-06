@@ -17,7 +17,7 @@ public class Client {
 			//			while (true) {
 			System.out.println("put successful");
 			//client.del("Test 0");
-			System.out.println("del successful");
+			//System.out.println("del successful");
 			try {
 				System.out.println(client.get("Test 0"));
 			} catch (KVException e) {
