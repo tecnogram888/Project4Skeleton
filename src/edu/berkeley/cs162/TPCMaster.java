@@ -43,6 +43,7 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -219,7 +220,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	}
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
-	private Condition otherThreadDone = TPCStateLock.newCondition();
 	//added by Doug
 	private ReentrantReadWriteLock consistantHashLock = new ReentrantReadWriteLock();
 
@@ -403,21 +403,21 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		// add two processTPCOpRunnables to threadpool, one for each slaveServer that’s storing the key
 		SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(TPCmess.getKey()));
 		SlaveInfo successor = findSuccessor(firstReplica);
-		Boolean b1 = new Boolean(false);
-		Boolean b2 = new Boolean(false);
+		Lock b1 = new ReentrantLock();
+		Lock b2 = new ReentrantLock();
+		Lock b3 = new ReentrantLock();
+		Lock b4 = new ReentrantLock();
 
-		Runnable firstReplicaRunnable = new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2);
-		Runnable successorRunnable = new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1);
+		Runnable firstReplicaRunnable = new processTPCOpRunnable<K,V>(TPCmess, firstReplica, b1, b2, b3);
+		Runnable successorRunnable = new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1, b4);
 
 		try {
 			threadpool.addToQueue(firstReplicaRunnable);
 			threadpool.addToQueue(successorRunnable);
-
-			synchronized(b1){
-				while (!(b1 && b2)){
-					b1.wait();
-				}
-			}
+			b3.lock();
+			b4.lock();
+			b3.unlock();
+			b4.unlock();
 		} catch (InterruptedException e) {
 			// should not happen
 			e.printStackTrace();
@@ -685,14 +685,16 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		TPCMessage message;
 		TPCMessage response;
 		SlaveInfo slaveServerInfo;
+		Lock l1, l2, l3;
 
-		Boolean b1, b2;
-
-		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo, Boolean _b1, Boolean _b2){
+		public processTPCOpRunnable(TPCMessage msg, SlaveInfo slaveServerInfo, Lock _l1, Lock _l2, Lock _l3){
 			this.message = msg;
 			this.slaveServerInfo = slaveServerInfo;
-			this.b1 = _b1;
-			this.b2 = _b2;
+			l1 = _l1;
+			l2 = _l2;
+			l3 = _l3;
+			l1.lock();
+			l3.lock();
 		}
 		@Override
 		public void run() {
@@ -707,42 +709,36 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						TPCMaster.exit();
 					}
 
-					b1 = false; //Set boolean to false when starting a section, true when finished.
-
 					TPCMessage slaveResponse = null;
 					try {
 						slaveResponse = sendReceiveSlaveTPC(slaveServerInfo, message);
 					} catch (SocketTimeoutException e1) {
 						// if timeout, this is equivalent to receiving an abort message
 						TPCStateLock.lock();
-						if (TPCState == EState.INIT){
+						TPCState = EState.ABORT;
+						TPCStateLock.unlock();
+						/*if (TPCState == EState.INIT){
 							// other thread is has not finished yet
 							TPCState = EState.ABORT;
 							TPCStateLock.unlock();
 							response = new TPCMessage(new KVMessage("Timeout Error: SlaveServer "+ slaveServerInfo.getSlaveID() +" has timed out during the first phase of 2PC"), "-1");
-							try {
-								b1 = true;
-								while (!(b1 && b2)) otherThreadDone.await();
-							} catch (InterruptedException e2) {
-								//TODO Doug how to handle this error?
-								System.err.println("INIT messed up when trying to wait");
-								e2.printStackTrace();
-								System.exit(1);
+							
+							
+							boolean gotl2 = l2.tryLock();
+							if (!gotl2){//other thread still holds its l1 lock
+								l1.unlock();//release my lock
+								l2.lock();//sleep until other thread releases lock
+								l2.unlock();//Now no threads should hold locks
+							} else {//Now I hold l1 and l2, other thread is ahead of me
+								l2.unlock();//Now release both locks so other thread can wake and continue
+								l1.unlock();
 							}
-							try {
-								TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
-							} catch (IllegalMonitorStateException e3) {
-								// TODO Check if this is correct
-								// thread does not currently own the lock, so can't unlock
-								// therefore, do nothing.
-							}
+							//Neither lock should be held now
 						} else {
 							// if the other thread already finished and is waiting
-							b1 = true;
-							otherThreadDone.notifyAll();
 							TPCStateLock.unlock();
 						}
-						break;
+						break;*/
 					}
 
 					// Sanity Check
@@ -754,71 +750,71 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					if (slaveResponse.getMsgType().equals("abort")){
 						response = new TPCMessage(new KVMessage (slaveResponse.getMessage()), "-1");
 						TPCStateLock.lock();
-						if (TPCState == EState.INIT){
+						TPCState = EState.ABORT;
+						TPCStateLock.unlock();
+/*						if (TPCState == EState.INIT){
 							// other thread is has not finished yet
 							TPCState = EState.ABORT;
 							TPCStateLock.unlock();
-							try {
-								b1 = true;
-								while (!(b1 && b2)) otherThreadDone.await();
-								try {
-									TPCStateLock.unlock();//Unlock after waking up, reacquires lock after signal is called
-								} catch (IllegalMonitorStateException e3) {
-									// TODO Check if this is correct
-									// thread does not currently own the lock, so can't unlock
-									// therefore, do nothing.
-								}
-							} catch (InterruptedException e2) {
-								// this shouldn't happen, await should not be broken
-								System.err.println("INIT messed up when trying to wait");
-								e2.printStackTrace();
-								TPCMaster.exit();
-							}
+						
 						} else {
 							// if the other thread already finished and is waiting
 							TPCState = EState.ABORT;
-							b1 = true;
-							otherThreadDone.notifyAll();
 							TPCStateLock.unlock();
-						}
+						}*/
 					} else if ("ready".equals(slaveResponse.getMsgType())){
 						response = new TPCMessage(new KVMessage ("ready"), "-1");
-						TPCStateLock.lock();
+						if (TPCState != EState.ABORT){
+							TPCStateLock.lock();
+							TPCState = EState.COMMIT;
+							TPCStateLock.unlock();
+						}
+						/*TPCStateLock.lock();
 						if (TPCState == EState.COMMIT || TPCState == EState.ABORT){
 							b1 = true;
-							otherThreadDone.notifyAll();
+							synchronized(otherThreadDone) {
+								otherThreadDone.notifyAll();
+							}
 							TPCStateLock.unlock();
 						} else {
 							TPCState = EState.COMMIT;
-							TPCStateLock.unlock();
-							try {
 								b1 = true;
-								while (!(b1 && b2)) otherThreadDone.await();
-								try {
-									TPCStateLock.unlock();//Unlock after waking up, re-acquires lock after signal is called
-								} catch (IllegalMonitorStateException e3) {
-									// TODO Check if this is correct
-									// thread does not currently own the lock, so can't unlock
-									// therefore, do nothing.
+								while (!(b1 && b2)) {
+									synchronized(otherThreadDone){
+										try{
+										otherThreadDone.await();
+										} catch (InterruptedException e) {
+											// this shouldn't happen, await should not be broken
+											System.err.println("INIT messed up when trying to wait");
+											e.printStackTrace();
+											TPCMaster.exit();
+										}
+									}
 								}
-							} catch (InterruptedException e) {
-								// this shouldn't happen, await should not be broken
-								System.err.println("INIT messed up when trying to wait");
-								e.printStackTrace();
-								TPCMaster.exit();
-							}
-						}
+								TPCStateLock.unlock();//Unlock after waking up, re-acquires lock after signal is called
+							*/
 					} else {
 						// this should not happen
 						System.err.println("Coordinator did not get a ready or abort response");
 						TPCMaster.exit();
 					}
+					
+					//synch
+					boolean gotl2 = l2.tryLock();
+					if (!gotl2){//other thread still holds its l1 lock
+						l1.unlock();//release my lock
+						l2.lock();//sleep until other thread releases lock
+						l2.unlock();//Now no threads should hold locks
+					} else {//Now I hold l1 and l2, other thread is ahead of me
+						l2.unlock();//Now release both locks so other thread can wake and continue
+						l1.unlock();
+					}
+					//Neither lock should be held now
 					break;
 
 				case ABORT:
 					TPCMessage abortMessage = new TPCMessage("abort", message.getTpcOpId());
 					TPCMessage abortAck;
-					b1 = false; //False at start of section
 					try {
 						abortAck = sendReceiveSlaveTPC(slaveServerInfo, abortMessage);
 						// check to see if response is ready or abort
@@ -833,13 +829,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						// this ONLY breaks out of the switch, not the while loop
 						break;
 					}
-					b1 = true;//Finished Abort section
-					otherThreadDone.notifyAll();
+					l3.unlock();
 					return;
 				case COMMIT:
 					TPCMessage commitMessage = new TPCMessage("commit", message.getTpcOpId());
 					TPCMessage commitAck;
-					b1 = false;//Start of section
 					try {
 						commitAck = sendReceiveSlaveTPC(slaveServerInfo, commitMessage);
 					} catch (SocketTimeoutException e) {
@@ -853,8 +847,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						System.exit(1);
 					}
 					// it is an ack, so we're done.
-					b1 = true; //Finished Commit section
-					otherThreadDone.notifyAll();
+					l3.unlock();
 					return;
 				}
 			}
