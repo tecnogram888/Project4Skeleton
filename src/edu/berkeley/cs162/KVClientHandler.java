@@ -136,18 +136,8 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 
 			KVMessage message = null;
 
-			try {
-				message = new KVMessage("resp", mess.getKey(), KVMessage.encodeObject(value));
-			} catch (KVException e){
-				KVMessage.sendMessage(client, e.getMsg());
-				try {
-					client.close();
-				} catch (IOException e2) {
-					// These ones don't send errors, this is a server error
-					e2.printStackTrace();
-				}
-				return;
-			}
+			
+			message = new KVMessage("resp", mess.getKey(), (String)value);
 
 			KVMessage.sendMessage(client, message);
 
@@ -156,7 +146,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 		} else if ("getEnKey".equals(mess.getMsgType())){
 			KVMessage message = null;
 			try {
-				message = new KVMessage(KVMessage.encodeObject(tpcMaster.getMasterKey()));
+				message = new KVMessage(tpcMaster.getMasterKey());
 			} catch (KVException e) {
 				e.printStackTrace();
 			}

@@ -213,6 +213,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 	String abortMessage = "";
 	String getReturnValue;
+	boolean getFinished = false;
 
 	private Long currentTpcOpId = -1L;
 	private ReentrantLock transactionLock = new ReentrantLock();
@@ -500,11 +501,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			//TODO NEED TO SLEEP HERE
-			try {
-				Thread.sleep(15000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-				TPCMaster.exit();
+			synchronized(currentTpcOpId){
+				while (getFinished == false){
+					try {
+						currentTpcOpId.wait();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+						TPCMaster.exit();
+					}
+				}
 			}
 
 			if (!abortMessage.equals("")) {
@@ -558,13 +563,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		KVMessage message;
 		SlaveInfo slaveServer;
 		SlaveInfo successor;
-		boolean finished;
 
 		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor, V value){
 			this.message = msg;
 			this.slaveServer = firstReplica;
 			this.successor = successor;
-			this.finished = false;
 		}
 
 		@Override
@@ -581,8 +584,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			if (slaveAnswer.getValue() != null){ // first slave sent back a good put response
 				getReturnValue = slaveAnswer.getValue();
 				// do housekeeping before returning
-				this.finished = true;
-				this.notifyAll();
+				synchronized(currentTpcOpId){
+					// do housekeeping before returning
+					getFinished = true;
+					currentTpcOpId.notifyAll();
+				}
 				return;
 			} else if (slaveAnswer.getMessage() != null){ // slave sent back an error message
 				// TODO DOUG confirm that inheritance works here
@@ -594,12 +600,22 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				if (slaveAnswer.getValue() != null){ // successor slave sent back a good put response
 					getReturnValue = slaveAnswer.getValue();
 					// do housekeeping before returning
-					this.finished = true;
-					this.notifyAll();
+					synchronized(currentTpcOpId){
+						// do housekeeping before returning
+						getFinished = true;
+						currentTpcOpId.notifyAll();
+					}
 					return;
 				} else if (slaveAnswer.getMessage() != null){ // successor slave sent back an error message
+					System.out.println("Both slaves returned error");
 					// set message to incorporate BOTH error messages
 					abortMessage = "@"+slaveServer.getSlaveID()+"=>"+message.getMessage()+"\n@"+successor.getSlaveID()+"=>"+slaveAnswer.getMessage();
+					synchronized(currentTpcOpId){
+						// do housekeeping before returning
+						getFinished = true;
+						currentTpcOpId.notifyAll();
+					}
+					return;
 				} else {
 					// this should not happen
 					System.err.println("getreq: successor slave didn't have a value or a message");
@@ -611,11 +627,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				TPCMaster.exit();
 			}
 
-			// do housekeeping before returning
-			this.finished = true;
-			this.notifyAll();
-			return;
-			
 		}
 
 		public TPCMessage sendReceiveSlaveGET(SlaveInfo slave, TPCMessage getRequest){
