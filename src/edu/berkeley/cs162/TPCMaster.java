@@ -741,6 +741,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						slaveResponse = sendReceiveSlaveTPC(slaveServerInfo, message);
 					} catch (SocketTimeoutException e1) {
 						// if timeout, this is equivalent to receiving an abort message
+						
+						if (abortMessage.equals("")){
+							abortMessage += "Timeout Error: SlaveServer "+slaveServerInfo.getSlaveID()+"has timed out during the first phase of 2PC";
+						} else {
+							abortMessage += "\nTimeout Error: SlaveServer "+slaveServerInfo.getSlaveID()+"has timed out during the first phase of 2PC";
+						}
+						
 						TPCStateLock.lock();
 						TPCState = EState.ABORT;
 						TPCStateLock.unlock();
