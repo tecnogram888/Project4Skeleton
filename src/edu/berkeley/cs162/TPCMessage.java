@@ -41,7 +41,9 @@ import java.io.PrintWriter;
 import java.io.Serializable;
 import java.io.StringWriter;
 import java.net.Socket;
+import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 
 import javax.xml.bind.DatatypeConverter;
 import javax.xml.parsers.DocumentBuilder;
@@ -438,6 +440,64 @@ public class TPCMessage extends KVMessage implements Serializable {
 			throw new KVException(new KVMessage("resp", "Unknown Error: Decoding object class not found"));
 		}
 		return obj;
+	}
+	
+	public static TPCMessage sendReceive(Socket connection, TPCMessage message) throws SocketTimeoutException {
+		String xmlFile = null;
+		
+		try {
+			xmlFile = message.toXML();
+		} catch (KVException e) {
+			// this should not happen
+			TPCMaster.exit();
+		}
+		
+		PrintWriter out = null;
+		InputStream in = null;
+		
+		try {
+			out = new PrintWriter(connection.getOutputStream(),true);
+		} catch (IOException e) {
+			// this should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		
+		out.println(xmlFile);
+		
+		try {
+			connection.shutdownOutput();
+		} catch (IOException e) {
+			// this should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		
+		try {
+			in = connection.getInputStream();
+			message = new TPCMessage(in);
+			in.close();
+		} catch (SocketTimeoutException e) {
+			throw e;
+		} catch (IOException e) {
+			// this should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		} catch (KVException e) {
+			// this should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+
+		out.close();
+		try {
+			connection.close();
+		} catch (IOException e) {
+			// this should not happen
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		return message;
 	}
 
 	/** utility function that sends a TPCMessage across a socket

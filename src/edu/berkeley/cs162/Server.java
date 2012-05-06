@@ -46,11 +46,13 @@ public class Server {
 		// Create TPCMaster
 		tpcMaster = new TPCMaster<String, String>(args);
 		tpcMaster.run();
-		
+		synchronized(tpcMaster){
+			tpcMaster.wait();
+		}
 		// Create KVClientHandler
 		System.out.println("Binding Master:");
 		server = new SocketServer(InetAddress.getLocalHost().getHostAddress(), 8080);
-		NetworkHandler handler = new KVClientHandler<String, String>(0, tpcMaster);
+		NetworkHandler handler = new KVClientHandler<String, String>(1, tpcMaster);
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting Master");

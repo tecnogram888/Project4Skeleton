@@ -103,7 +103,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 				addToConsistentHash(newSlave);
 				if (consistentHash.size() >= listOfSlaves.length)
-					TPCMaster.this.threadpool.startPool();
+					synchronized(TPCMaster.this){
+					TPCMaster.this.notifyAll();
+				}
 
 				TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
 
