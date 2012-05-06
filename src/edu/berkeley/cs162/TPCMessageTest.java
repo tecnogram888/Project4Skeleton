@@ -429,8 +429,7 @@ public class TPCMessageTest {
 			fail();
 		}
 		String x = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" 
-				+ "<KVMessage type=\"getEnKey\">\n" +
-				"</KVMessage>\n";
+				+ "<KVMessage type=\"getEnKey\"/>\n";
 		assertEquals(x, xml);
 	} 	
 	
