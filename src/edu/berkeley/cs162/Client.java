@@ -16,7 +16,7 @@ public class Client {
 			client.put("Test 0", "Test 1");
 			//			while (true) {
 			System.out.println("put successful");
-			client.del("Test 0");
+			//client.del("Test 0");
 			System.out.println("del successful");
 			try {
 				System.out.println(client.get("Test 0"));
