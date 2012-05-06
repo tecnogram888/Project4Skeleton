@@ -136,13 +136,12 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 	public void rebuildKeyServer() throws KVException {
 		// implement me
 		this.loadFromDisk();
-		entries = this.getEntries();
 		int x = 0; //just a counter
 		while (x< entries.size()) { //execute each operation in entries
 			TPCMessage msg = (TPCMessage) entries.get(x);
 
 			//check if there is no following abort / commit tpc message (interrupted) 
-			if (entries.size()-1 == x || entries.get(x+1) == null) {
+			if (entries.size()-1 <= x || entries.get(x+1) == null) {
 				interruptedTpcOperation = entries.get(x); 
 				x++;
 			} else {
@@ -163,7 +162,6 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 							x+=2;//do nothing
 						}
 					} else {//TPCOpID does not match
-						x++;
 						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}
@@ -180,7 +178,6 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 							x+=2;//do nothing
 						}
 					} else { //TPCOpID does not match
-						x++;
 						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}

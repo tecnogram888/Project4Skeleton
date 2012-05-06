@@ -7,13 +7,90 @@ import java.util.ArrayList;
 import org.junit.Test;
 
 public class TPCLogTest {
+	
+	//test that correctly rebuilds keyserver by executing each entry in the log
+		@Test
+		public void testRebuildKeyServerWithInterruptedOp() {
+			//set up TPCLog
+			KeyServer<String, String> server = new KeyServer<String, String>(10);
+			double someRando = Math.random();
+			TPCLog<String, String> log = new TPCLog<String, String> ("logPath" + someRando, server);
+			
+			//adds put request & abort
+			TPCMessage put2 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
+			log.appendAndFlush(put2);
+			TPCMessage abortPut2 = new TPCMessage ("abort", "1");
+			log.appendAndFlush(abortPut2);
+			
+			//adds put request & commit
+			TPCMessage put1 = new TPCMessage ("ready", "key2", "value2", "putreq", "2");
+			log.appendAndFlush(put1);
+			TPCMessage commitPut1 = new TPCMessage ("commit", "2");
+			log.appendAndFlush(commitPut1);
+			
+			//adds del request & abort
+			TPCMessage del2 = new TPCMessage("ready", "key3", "delreq", "3");
+			log.appendAndFlush(del2);
+			TPCMessage abortDel2 = new TPCMessage ("abort","3");
+			log.appendAndFlush(abortDel2);
+			
+			//adds del request & commit
+			TPCMessage del1 = new TPCMessage("ready", "key2", "delreq", "4");
+			log.appendAndFlush(del1);
+			TPCMessage commitDel1 = new TPCMessage ("commit","4");
+			log.appendAndFlush(commitDel1);
+			
+			//adds interrupted operation
+			TPCMessage put3 = new TPCMessage("ready", "key4", "value4", "putreq", "5");
+			log.appendAndFlush(put3);
+			TPCMessage commitPut3 = new TPCMessage ("commit","5");
+			log.appendAndFlush(commitPut3);
+			
+			TPCMessage put4 = new TPCMessage("ready", "key5", "value5", "putreq", "6");
+			log.appendAndFlush(put4);
+			
+			//test rebuilding
+			String logPath = log.logPath();
+			KeyServer<String, String> server2 = new KeyServer<String, String>(10);
+			TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server2);
+			try {
+				log2.rebuildKeyServer();
+			} catch (KVException e) {
+				System.out.println("Error rebuilding " + e);
+			}
+			for (int x = 0; x < log.getEntries().size(); x++) {
+				TPCMessage y1 = (TPCMessage) log2.getEntries().get(x);
+				TPCMessage y2 = (TPCMessage) log.getEntries().get(x);
+				assertTrue(y1.equals(y2));
+			}
+			
+			try {
+				String s2 = server2.get("key4");
+				System.out.println(s2);
+				assertEquals("value4", s2 );
+			} catch (KVException e) {
+				System.out.println("Didn't rebuild the keyserver correctly");
+				fail();
+			}
+			try {
+				server2.get("key2");
+				fail();
+			} catch (KVException e) {
+				System.out.println("Delete worked!");
+			}
+			
+			
+			//verify that log hasInterruptedTpcOperation
+			assertTrue(log2.hasInterruptedTpcOperation());		
+		}
 
 	//test that adds to disk successfully
 	@Test
 	public void testAppendAndFlush() {
 		//set up TPCLog
-		KeyServer<String, String> server = new KeyServer<String, String>(9); 
-		TPCLog<String, String> log = new TPCLog<String, String> ("logPath", server);
+		KeyServer<String, String> server = new KeyServer<String, String>(9);
+		double someRando = Math.random();
+		TPCLog<String, String> log = new TPCLog<String, String> ("logPath"+someRando, server);
 		ArrayList<KVMessage> list = log.getEntries();
 		
 		//test put request & commit
@@ -62,8 +139,9 @@ public class TPCLogTest {
 	@Test
 	public void testRebuildKeyServer() {
 		//set up TPCLog
-		KeyServer<String, String> server = new KeyServer<String, String>(10); 
-		TPCLog<String, String> log = new TPCLog<String, String> ("logPath", server);
+		KeyServer<String, String> server = new KeyServer<String, String>(10);
+		double someRando = Math.random();
+		TPCLog<String, String> log = new TPCLog<String, String> ("logPath" + someRando, server);
 		
 		//adds put request & abort
 		TPCMessage put2 = new TPCMessage ("ready", "key1", "value1", "putreq", "1");
@@ -91,11 +169,14 @@ public class TPCLogTest {
 		
 		//adds interrupted operation
 		TPCMessage put3 = new TPCMessage("ready", "key4", "value4", "putreq", "5");
-		log.appendAndFlush(put2);
+		log.appendAndFlush(put3);
+		TPCMessage commitPut3 = new TPCMessage ("commit","5");
+		log.appendAndFlush(commitPut3);
 		
 		//test rebuilding
 		String logPath = log.logPath();
-		TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server);
+		KeyServer<String, String> server2 = new KeyServer<String, String>(10);
+		TPCLog<String, String> log2 = new TPCLog<String, String> (logPath, server2);
 		try {
 			log2.rebuildKeyServer();
 		} catch (KVException e) {
@@ -107,7 +188,25 @@ public class TPCLogTest {
 			assertTrue(y1.equals(y2));
 		}
 		
+		try {
+			String s2 = server2.get("key4");
+			System.out.println(s2);
+			assertEquals("value4", s2 );
+		} catch (KVException e) {
+			System.out.println("Didn't rebuild the keyserver correctly");
+			fail();
+		}
+		try {
+			server2.get("key2");
+			fail();
+		} catch (KVException e) {
+			System.out.println("Delete worked!");
+		}
+		
+		
 		//verify that log hasInterruptedTpcOperation
-		assertTrue(log2.hasInterruptedTpcOperation());		
+		//assertTrue(log2.hasInterruptedTpcOperation());		
 	}
 }
+
+

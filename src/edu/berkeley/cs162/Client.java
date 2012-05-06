@@ -13,7 +13,7 @@ public class Client {
 		KVClient<String, String> client = initClient();
 		try {
 			int i = 0;
-			client.put("Test 0", "Test 1");
+			//client.put("Test 0", "Test 1");
 			//			while (true) {
 			System.out.println("put successful");
 			//client.del("Test 0");
