@@ -240,7 +240,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		regServer.addHandler(new TPCRegistrationHandler(1));
 
 		// delayed start ThreadPool
-		threadpool = new ThreadPool(10, false); //TODO: how many threads?
+		threadpool = new ThreadPool(10); //TODO: how many threads?
 		KeyGenerator keygen = KeyGenerator.getInstance("DESede");
 		masterKey = keygen.generateKey();
 	}
@@ -391,6 +391,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		ReentrantReadWriteLock accessLock = accessLocks.get(TPCmess.getKey());
 		if (accessLock == null) {
 			accessLocks.put(TPCmess.getKey(), new ReentrantReadWriteLock());
+			accessLock = accessLocks.get(TPCmess.getKey());
 		}
 		accessLock.writeLock().lock();
 
@@ -412,8 +413,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			threadpool.addToQueue(firstReplicaRunnable);
 			threadpool.addToQueue(successorRunnable);
 
-			while (!(b1 && b2)){
-				b1.wait();
+			synchronized(b1){
+				while (!(b1 && b2)){
+					b1.wait();
+				}
 			}
 		} catch (InterruptedException e) {
 			// should not happen
@@ -882,17 +885,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				e.printStackTrace();
 				TPCMaster.exit();
 			}
+			
+			slaveResponse = TPCMessage.sendReceive(slaveSocket, opRequest);
 
-			// send the put/get request to slave
-			TPCMessage.sendMessage(slaveSocket, opRequest);
-
-			// receive a response from slave
-			// Correctness Constraint: slaveAnswer is either a ready response or an abort response
-			try {
-				slaveResponse = TPCMessage.receiveMessage(slaveSocket);
-			} catch (SocketTimeoutException e) {
-				throw e;
-			}
+//			// send the put/get request to slave
+//			TPCMessage.sendMessage(slaveSocket, opRequest);
+//
+//			// receive a response from slave
+//			// Correctness Constraint: slaveAnswer is either a ready response or an abort response
+//			try {
+//				slaveResponse = TPCMessage.receiveMessage(slaveSocket);
+//			} catch (SocketTimeoutException e) {
+//				throw e;
+//			}
 			return slaveResponse;
 		}
 

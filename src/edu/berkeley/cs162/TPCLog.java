@@ -150,7 +150,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 
 				//execute message in log
 				TPCMessage nextMsg = (TPCMessage) entries.get(x+1);
-				if (msg.getMessage().equals("putreq")) {
+				if (msg.getMsgType().equals("putreq")) {
 					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
 						if (nextMsg.getMsgType().equals("commit")) {
 							try {
@@ -167,7 +167,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}
-				else if (msg.getMessage().equals("delreq")) {
+				else if (msg.getMsgType().equals("delreq")) {
 					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
 						if (nextMsg.getMsgType().equals("commit")) {
 							try {

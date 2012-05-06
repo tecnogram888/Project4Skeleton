@@ -541,7 +541,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 		try {
 			in = connection.getInputStream();
 			rtn = new TPCMessage(in);
-			in.close();
+			//in.close();
 		} catch (SocketTimeoutException e){
 			throw e;
 		} catch (IOException e) {

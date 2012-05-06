@@ -13,9 +13,10 @@ public class Client {
 		KVClient<String, String> client = initClient();
 		try {
 			int i = 0;
-			while (true) {
+			client.put("Test 0", "Test 1");
+//			while (true) {
 			System.out.println("start");
-			try {
+/*			try {
 			System.out.println("get Testi: " + client.get("Test" + i));
 			} catch (Exception e) {
 				System.out.println("get returned null");
@@ -39,7 +40,7 @@ public class Client {
 				e.printStackTrace();
 			}
 			
-			}
+			}*/
 		} catch (KVException e) {
 			System.out.println(e.getMsg().getMessage());
 		}

@@ -106,6 +106,7 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		} catch (UnknownHostException e) {
 			throw new KVException(new KVMessage("Network Error: Could not connect"));
 		} catch (IOException e) {
+			e.printStackTrace();
 			throw new KVException(new KVMessage("Network Error: Could not create socket"));
 		}
 		try {
