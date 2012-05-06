@@ -273,12 +273,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			System.err.println("TPCMasterHandler -- handle somehow got to the default case");
 			break;
 		}
-		try {
-			master.close();
-		} catch (IOException e) {
-			// These ones don't send errors, this is a server error
-			e.printStackTrace();
-		}
 	}
 
 	class getRunnable implements Runnable {
