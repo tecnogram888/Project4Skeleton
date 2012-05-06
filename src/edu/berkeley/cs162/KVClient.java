@@ -224,4 +224,11 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		if (!message.getMsgType().equals("resp")) throw new KVException(new KVMessage("Unknown Error: response xml not a response!!"));
 		if (!"Success".equals(message.getMessage())) throw new KVException(new KVMessage(message.getMessage()));
 	}
+	
+	public void ignoreNext(Long slaveID) throws KVException {
+		KVMessage message = new KVMessage("ignoreNext", slaveID.toString());
+		message = sendRecieve(message);
+		if (!message.getMsgType().equals("resp")) throw new KVException(new KVMessage("Unknown Error: response xml not a response!!"));
+		if (!"Success".equals(message.getMessage())) throw new KVException(new KVMessage(message.getMessage()));
+	}
 }
