@@ -437,7 +437,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		if (success) {
 			if (TPCmess.getMsgType().equals("putreq")){
 				masterCache.put((K) TPCMessage.decodeObject(TPCmess.getKey()), 
-						(V) TPCMessage.encodeObject(TPCmess.getValue()));
+						(V)TPCmess.getValue());
 			} else {
 				masterCache.del((K) TPCMessage.decodeObject(TPCmess.getKey()));
 			}
@@ -484,7 +484,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		accessLock.readLock().lock();
 
 		// try the cache first
-		System.out.println("Trying cache...");
 		V value = masterCache.get((K) KVMessage.decodeObject(msg.getKey()));
 
 		if (value == null) {
@@ -519,7 +518,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				accessLock.readLock().unlock();
 				throw new KVException(new KVMessage(temp));
 			} else { // get should have returned an good value
-				value = (V) TPCMessage.decodeObject(getReturnValue);
+				value = (V) getReturnValue;
 
 				// put into cache
 				accessLock.writeLock().lock();
@@ -626,6 +625,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				System.err.println("getreq: first slave didn't have a value or a message");
 				TPCMaster.exit();
 			}
+
 		}
 
 		public TPCMessage sendReceiveSlaveGET(SlaveInfo slave, TPCMessage getRequest){

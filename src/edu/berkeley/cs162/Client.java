@@ -16,14 +16,15 @@ public class Client {
 			client.put("Test 0", "Test 1");
 			//			while (true) {
 			System.out.println("put successful");
-			client.del("Test 0");
-			System.out.println("del successful");
+			//client.del("Test 0");
+			//System.out.println("del successful");
 			try {
 				System.out.println(client.get("Test 0"));
 			} catch (KVException e) {
 				System.out.println(((KVException) e).getMsg().getMessage());
 				System.out.println("get returned null");
 			}
+			System.out.print("Did it retrieve the right string? " + client.get("Test 0").equals("Test 1"));
 			/*			
 			System.out.println("put Testi, Testi+1: " + client.put("Test" + i, "Test" + (i+1)));
 			System.out.println("put Testi, Testi+2: " + client.put("Test" + i, "Test" + (i+2)));
