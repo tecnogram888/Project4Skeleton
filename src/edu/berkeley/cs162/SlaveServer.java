@@ -108,7 +108,7 @@ public class SlaveServer {
 		Socket register = null;
 		TPCMessage regMsg = null;
 		try {
-			register = new Socket(masterHostName, masterPort);
+			register = new Socket(masterHostName, registrationPort);
 		} catch(UnknownHostException e) {
 			System.err.println("could not connect");
 		} catch(IOException e) {
@@ -120,7 +120,7 @@ public class SlaveServer {
 			System.err.println("could not set socket timeout");
 		}
 		
-		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+masterPort);
+		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+server.getPort());
 		TPCMessage.sendMessage(register, regMsg);
 		
 		TPCMessage regAck = null;
@@ -130,6 +130,7 @@ public class SlaveServer {
 		} catch (KVException e) {
 			System.err.println("error reading registration message");
 		} catch (IOException e) {
+			e.printStackTrace();
 			System.err.println("error reading input stream");
 		}//TODO How to handle these errors?
 		
