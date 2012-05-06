@@ -135,7 +135,7 @@ public class SlaveServer {
 		}
 		TPCMessage regAck = TPCMessage.receiveMessage(register);
 		
-		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort)
+		if (regAck.getMessage().equals("Successfully registered"+slaveID+"@"+masterHostName+":"+server.getPort()))
 			System.err.println("could not successfully register");
 	}
 
