@@ -444,9 +444,13 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			// find the replica that aborted and return its error message
 			String temp = abortMessage;
 			abortMessage = "";
+			accessLock.writeLock().unlock();
+			System.out.println("transactionLock unlocked");
+			transactionLock.unlock();
 			throw new KVException(new KVMessage(temp));
 		}
 		accessLock.writeLock().unlock();
+		System.out.println("transactionLock unlocked");
 		transactionLock.unlock();
 		return success;
 	}
@@ -507,6 +511,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				// abortMessage is not the empty string, meaning get did not return a correct value
 				String temp = abortMessage;
 				abortMessage = "";
+				accessLock.readLock().unlock();
 				throw new KVException(new KVMessage(temp));
 			} else { // get should have returned an good value
 				value = (V) TPCMessage.decodeObject(getReturnValue);
@@ -584,7 +589,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				message = slaveAnswer;
 
 				// contact Successor
-				slaveAnswer = sendReceiveSlaveGET(slaveServer, tpcMessage);
+				slaveAnswer = sendReceiveSlaveGET(successor, tpcMessage);
 
 				if (slaveAnswer.getValue() != null){ // successor slave sent back a good put response
 					getReturnValue = slaveAnswer.getValue();
@@ -657,7 +662,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				slaveAnswer = TPCMessage.receiveMessage(firstSlave);
 				System.out.println("Received from Slave"+ slave.getSlaveID() + ":");
 				try {
-					System.out.println(getRequest.toXML()+"\n");
+					System.out.println(slaveAnswer.toXML()+"\n");
 				} catch (KVException e) {
 					e.printStackTrace();
 					TPCMaster.exit();

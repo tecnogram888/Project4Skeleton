@@ -1,29 +1,30 @@
 package edu.berkeley.cs162;
 
 public class Client {
-	
+
 	public static final String addr = "localhost";
 	public static final int portNum = 8080;
-	
+
 	public static KVClient<String, String> initClient (){
 		return new KVClient<String, String>(addr, portNum);
 	}
-	
+
 	public static void main(String[] args){
 		KVClient<String, String> client = initClient();
 		try {
 			int i = 0;
 			client.put("Test 0", "Test 1");
-//			while (true) {
+			//			while (true) {
 			System.out.println("put successful");
 			client.del("Test 0");
 			System.out.println("del successful");
-			System.out.println(client.get("Test 0"));
-/*			try {
-			System.out.println("get Testi: " + client.get("Test" + i));
-			} catch (Exception e) {
+			try {
+				System.out.println(client.get("Test 0"));
+			} catch (KVException e) {
+				System.out.println(((KVException) e).getMsg().getMessage());
 				System.out.println("get returned null");
 			}
+			/*			
 			System.out.println("put Testi, Testi+1: " + client.put("Test" + i, "Test" + (i+1)));
 			System.out.println("put Testi, Testi+2: " + client.put("Test" + i, "Test" + (i+2)));
 			try {
@@ -42,7 +43,7 @@ public class Client {
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
-			
+
 			}*/
 		} catch (KVException e) {
 			e.printStackTrace();

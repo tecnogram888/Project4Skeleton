@@ -81,6 +81,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		// master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
+		System.out.println("Received from Master at Slave " + SlaveID + ":");
+		try {
+			System.out.println(inputMessage.toXML()+"\n");
+		} catch (KVException e) {
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
 
 		//don't think we need this anymore
 //		if(!inputMessage.getMsgType().equals("getreq") && 
@@ -112,16 +119,16 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				try {
 					threadpool.addToQueue(new getRunnable((K)TPCMessage.decodeObject(inputMessage.getKey()), keyserver, master, inputMessage.getTpcOpId()));
 				} catch (InterruptedException e) {
-					TPCMessage.sendMessage(master, new TPCMessage(new KVMessage("Unknown Error: Get Request failed -- InterruptedException from the threadpool"), "-1"));
+					sendMessage(master, new TPCMessage(new KVMessage("Unknown Error: Get Request failed -- InterruptedException from the threadpool"), "-1"));
 					break;
 				} catch (KVException e){
-					TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+					sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
 					break;
 				}
 			} else if (inputMessage.getMsgType().equals("putreq")){
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
@@ -137,7 +144,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (InterruptedException e) {
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
 					TPCStateLock.unlock();
@@ -145,7 +152,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
 					TPCStateLock.unlock();
@@ -154,7 +161,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			} else if (inputMessage.getMsgType().equals("delreq")){
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
@@ -169,7 +176,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (InterruptedException e) {
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
 					TPCStateLock.unlock();
@@ -177,7 +184,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} catch (KVException e){
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", e.getMsg().getMessage(), inputMessage.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMsg);
+					sendMessage(master, abortMsg);
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
 					TPCStateLock.unlock();
@@ -186,7 +193,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			} else if (inputMessage.getMsgType().equals("ignoreNext")){
 				ignoreNext = true;
 				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
-				TPCMessage.sendMessage(master, response);
+				sendMessage(master, response);
 				return;
 			} else {
 				// this should not happen.
@@ -317,7 +324,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			try {
 				value = keyserver.get(key);
 			} catch (KVException e) {
-				TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
 				accessLock.readLock().unlock();
 				return;
 			}
@@ -330,13 +337,21 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				KVresponse = new KVMessage("resp", KVMessage.encodeObject(key), KVMessage.encodeObject(value));
 				TPCresponse = new TPCMessage(KVresponse, TpcOpID);
 			} catch (KVException e){
-				TPCMessage.sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
+				sendMessage(master, new TPCMessage(e.getMsg(), "-1"));
 				accessLock.readLock().unlock();
 				return;
 			}
 
 			// send the TPCMessage to the master
-			TPCMessage.sendMessage(master, TPCresponse);
+			// send the get request to slave
+			System.out.println("Sending to Master from Slave " + SlaveID + ":");
+			try {
+				System.out.println(TPCresponse.toXML()+"\n");
+			} catch (KVException e) {
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+			sendMessage(master, TPCresponse);
 			// TODO should I still close it here, I close it in handle()
 			try {
 				master.close();
@@ -375,7 +390,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (!checkKey(message.getKey())){
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized key", message.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMessage);
+					sendMessage(master, abortMessage);
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
 					TPCStateLock.unlock();
@@ -383,14 +398,14 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				} else if (!checkValue(message.getValue())){
 					// send Abort response
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMessage);
+					sendMessage(master, abortMessage);
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
 					TPCStateLock.unlock();
 					break;
 				} else{
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					TPCMessage.sendMessage(master, readyMessage);		
+					sendMessage(master, readyMessage);		
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
 					TPCStateLock.unlock();
@@ -399,13 +414,15 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			case COMMIT:
 				try {
 					keyserver.put(key, value);
+					System.out.println("Put " + key + ", " + value + " into keyServer!\n");
+					System.out.println(keyserver.get(key)+"\n");
 				} catch (KVException e) {
 					System.err.println("put COMMIT failed");
 					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMessage.sendMessage(master, ackMessage);
+				sendMessage(master, ackMessage);
 				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
 				TPCStateLock.unlock();
@@ -413,7 +430,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMessage.sendMessage(master, ackMessage);
+				sendMessage(master, ackMessage);
 				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
 				TPCStateLock.unlock();
@@ -460,7 +477,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				// check to see if delreq will send back an Abort response or a Ready response
 				if (!checkKey(message.getKey())){
 					TPCMessage abortMessage = new TPCMessage("abort", "Over sized value", message.getTpcOpId(), false);
-					TPCMessage.sendMessage(master, abortMessage);
+					sendMessage(master, abortMessage);
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
 					TPCStateLock.unlock();
@@ -472,7 +489,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					} catch (KVException e) {
 						// this means that key is not inside of keyserver
 						TPCMessage abortMessage = new TPCMessage("abort", "Key doesn't exist", message.getTpcOpId(), false);
-						TPCMessage.sendMessage(master, abortMessage);
+						sendMessage(master, abortMessage);
 						TPCStateLock.lock();
 						TPCState = EState.DEL_WAIT;
 						TPCStateLock.unlock();
@@ -480,7 +497,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					}
 
 					TPCMessage readyMessage = new TPCMessage("ready", TpcOpID);
-					TPCMessage.sendMessage(master, readyMessage);
+					sendMessage(master, readyMessage);
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
 					TPCStateLock.unlock();
@@ -493,14 +510,16 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				 */
 				try {
 					keyserver.del(key);
+					System.out.println("Deleted " + key + " from keyServer!\n");
 				} catch (KVException e) {
 					// this breaks the correctness constraint
 					System.err.println("Delete COMMIT failed when it wasn't supposed to");
+					e.printStackTrace();
 					TPCMaster.exit();
 				}
 				// send acknowledgment
 				TPCMessage ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMessage.sendMessage(master, ackMessage);
+				sendMessage(master, ackMessage);
 				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
 				TPCStateLock.unlock();
@@ -508,7 +527,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			case ABORT:
 				// send acknowledgment
 				ackMessage = new TPCMessage("ack", TpcOpID);
-				TPCMessage.sendMessage(master, ackMessage);
+				sendMessage(master, ackMessage);
 				TPCStateLock.lock();
 				TPCState = EState.NOSTATE;
 				TPCStateLock.unlock();
@@ -556,6 +575,17 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		} else{
 			return true;
 		}
+	}
+	
+	private void sendMessage(Socket master, TPCMessage message){
+		System.out.println("Sending message to Master from Slave " + SlaveID + ":");
+		try {
+			System.out.println(message.toXML()+"\n");
+		} catch (KVException e) {
+			e.printStackTrace();
+			TPCMaster.exit();
+		}
+		TPCMessage.sendMessage(master, message);
 	}
 
 
