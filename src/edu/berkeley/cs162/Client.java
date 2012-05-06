@@ -15,7 +15,8 @@ public class Client {
 			int i = 0;
 			client.put("Test 0", "Test 1");
 //			while (true) {
-			System.out.println("start");
+			System.out.println("put successful");
+			System.out.println(client.get("Test 0"));
 /*			try {
 			System.out.println("get Testi: " + client.get("Test" + i));
 			} catch (Exception e) {
@@ -42,10 +43,8 @@ public class Client {
 			
 			}*/
 		} catch (KVException e) {
+			e.printStackTrace();
 			System.out.println(e.getMsg().getMessage());
 		}
-
-
 	}
-
 }

@@ -396,7 +396,8 @@ public class TPCMessage extends KVMessage implements Serializable {
 		rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
 		//print xml
-		System.out.println("Here's the xml:\n\n" + rtn);
+		//System.out.println("Here's the xml:\n\n" + rtn);
+		//KVMessage.delay();
 		return rtn;
 	}
 
@@ -462,7 +463,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 			e.printStackTrace();
 			TPCMaster.exit();
 		}
-		
+		System.out.println("Sending... " + xmlFile);
 		out.println(xmlFile);
 		
 		try {
@@ -476,6 +477,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 		try {
 			in = connection.getInputStream();
 			message = new TPCMessage(in);
+			System.out.println("Just Received... " + message.toXML());
 			in.close();
 		} catch (SocketTimeoutException e) {
 			throw e;
@@ -519,7 +521,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 			// should NOT ever throw exception here
 			e.printStackTrace();
 		}
-		
+		System.out.println("Sending... " + xmlFile);
 		out.println(xmlFile);
 		
 		try {
@@ -541,6 +543,7 @@ public class TPCMessage extends KVMessage implements Serializable {
 		try {
 			in = connection.getInputStream();
 			rtn = new TPCMessage(in);
+			System.out.println("Just Received... " + rtn.toXML());
 			//in.close();
 		} catch (SocketTimeoutException e){
 			throw e;

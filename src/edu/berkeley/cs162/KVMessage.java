@@ -317,7 +317,8 @@ public class KVMessage{
             rtn = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" + xmlString;
 
             //print xml
-            System.out.println("Here's the xml:\n\n" + rtn);
+           // System.out.println("Here's the xml:\n\n" + rtn);
+            //KVMessage.delay();
 		return rtn;
 	}
 	
@@ -382,7 +383,7 @@ public class KVMessage{
 			// should NOT ever throw exception here
 			e.printStackTrace();
 		}
-		
+		System.out.println("Sending... "+xmlFile);
 		out.println(xmlFile);
 		
 		try {
@@ -410,5 +411,13 @@ public class KVMessage{
 			e.printStackTrace();
 		}
 		return rtn;
+	}
+	
+	public static void delay(){
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 }

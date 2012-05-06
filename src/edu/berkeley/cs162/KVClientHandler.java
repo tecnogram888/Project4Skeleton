@@ -81,6 +81,7 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		KVMessage mess = null;
 		try {
 			mess = KVMessage.receiveMessage(client);
+			System.out.println("Received XML: " + mess.toXML());
 		} catch (KVException e) {
 			KVMessage.sendMessage(client, e.getMsg());
 			return;
@@ -88,12 +89,17 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 		
 		if (mess.getMsgType().equals("ignoreNext")){
 			TPCMessage tpcMess = new TPCMessage(mess, "-1");
-			KVMessage result = tpcMaster.handleIgnore(tpcMess);
-			KVMessage.sendMessage(client, result);
+			try {
+				tpcMaster.handleIgnore(tpcMess, client);
+			} catch (KVException e) {
+				KVMessage.sendMessage(client, e.getMsg());
+				return;
+			}
 			return;
 		}
 
 		try {
+			System.out.println("added to runnable");
 			threadpool.addToQueue(new processMessageRunnable<K,V>(mess, client, tpcMaster));
 		} catch (InterruptedException e) {
 			KVMessage.sendMessage(client, new KVMessage("Unknown Error: InterruptedException from the threadpool"));
@@ -165,6 +171,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 		} else if (mess.getMsgType().equals("putreq") || mess.getMsgType().equals("delreq")) {
 			boolean isPutReq = mess.getMsgType().equals("putreq");
 			try {
+				System.out.println("called performTPCOperation");
 				tpcMaster.performTPCOperation(mess, isPutReq);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());

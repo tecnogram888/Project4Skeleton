@@ -105,8 +105,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				addToConsistentHash(newSlave);
 				if (consistentHash.size() >= listOfSlaves.length)
 					synchronized(TPCMaster.this){
-					TPCMaster.this.notifyAll();
-				}
+						TPCMaster.this.notifyAll();
+					}
 
 				TPCMessage msg = new TPCMessage("Successfully registered"+newSlave.slaveID+"@"+newSlave.hostName+":"+newSlave.port);
 
@@ -211,6 +211,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	private Hashtable<String, ReentrantReadWriteLock> accessLocks = 
 			new Hashtable<String, ReentrantReadWriteLock>();
 
+	String abortMessage = "";
+	String getReturnValue;
+	
 	private Long currentTpcOpId = -1L;
 	private ReentrantLock transactionLock = new ReentrantLock();
 	private boolean canCommit = false;
@@ -341,7 +344,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		if (consistentHash.isEmpty()) { return null; }
 		Long x = ((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(hashedKey);
 		if (x == null) {
-			
+
 			SlaveInfo temp = consistentHash.get(
 					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
 			consistantHashLock.readLock().unlock();
@@ -412,8 +415,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		Runnable successorRunnable = new processTPCOpRunnable<K,V>(TPCmess, successor, b2, b1, b4);
 
 		try {
+			System.out.println("added to performTCPOpRunnable");
 			threadpool.addToQueue(firstReplicaRunnable);
 			threadpool.addToQueue(successorRunnable);
+			Thread.yield();
 			b3.lock();
 			b4.lock();
 			b3.unlock();
@@ -437,17 +442,9 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 		} else {
 			// find the replica that aborted and return its error message
-			if (((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage().equals("ready")){
-				throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()));
-			} else if (((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage().equals("ready")){
-				throw new KVException(new KVMessage(((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()));
-			} else {
-				// they both aborted
-				throw new KVException(new KVMessage(
-						"@"+firstReplica.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) firstReplicaRunnable).getResponse().getMessage()+
-						"\n@"+successor.getSlaveID()+"=>"+((processTPCOpRunnable<K, V>) successorRunnable).getResponse().getMessage()
-						));
-			}
+			String temp = abortMessage;
+			abortMessage = "";
+			throw new KVException(new KVMessage(temp));
 		}
 		accessLock.writeLock().unlock();
 		transactionLock.unlock();
@@ -495,7 +492,24 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				e.printStackTrace();
 				TPCMaster.exit();
 			}
-			// TODO DOUG sleeping on threads
+			
+			if (!abortMessage.equals("")){
+				// abortMessage is not the empty string, meaning get did not return a correct value
+				String temp = abortMessage;
+				abortMessage = "";
+				throw new KVException(new KVMessage(temp));
+			} else { // get should have returned an good value
+			value = (V) TPCMessage.decodeObject(getReturnValue);
+			
+			// put into cache
+			accessLock.writeLock().lock();
+			masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
+			accessLock.writeLock().unlock();
+			accessLock.readLock().unlock();
+			return value;
+			}
+			// TODO not sure why we need synchronization there's only one thread
+			/*// TODO DOUG sleeping on threads
 			// value somehow gets set to the proper value
 			synchronized (tempGetRunnable) {
 				while(((getRunnable<K,V>) tempGetRunnable).getFinished() == false)
@@ -507,19 +521,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						TPCMaster.exit();
 					}
 			}
-			value = ((getRunnable<K,V>) tempGetRunnable).getValue();
-			if (value != null) {
-				// put into cache
-				accessLock.writeLock().lock();
-				masterCache.put((K) KVMessage.decodeObject(msg.getKey()), value);
-				accessLock.writeLock().unlock();
-				accessLock.readLock().unlock();
-				return value;
-			}
-			if (value == null){
-				accessLock.readLock().unlock();
-				throw new KVException(((getRunnable<K,V>) tempGetRunnable).getMessage());
-			}
+			value = ((getRunnable<K,V>) tempGetRunnable).getValue();*/
 		}
 		accessLock.readLock().unlock();
 		return value;
@@ -541,27 +543,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		KVMessage message;
 		SlaveInfo slaveServer;
 		SlaveInfo successor;
-		V value;
 		boolean finished;
-
-
-		public V getValue() {
-			return this.value;
-		}
-
-		public boolean getFinished() {
-			return this.finished;
-		}
-
-		public KVMessage getMessage(){
-			return this.message;
-		}
 
 		public getRunnable (KVMessage msg, SlaveInfo firstReplica, SlaveInfo successor, V value){
 			this.message = msg;
 			this.slaveServer = firstReplica;
 			this.successor = successor;
-			this.value = value;
 			this.finished = false;
 		}
 
@@ -577,19 +564,12 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			slaveAnswer = sendReceiveSlaveGET(slaveServer, tpcMessage);
 
 			if (slaveAnswer.getValue() != null){ // first slave sent back a good put response
-				try {
-					value = (V) TPCMessage.encodeObject(slaveAnswer.getValue());
-				} catch (KVException e) {
-					// should not happen
-					e.printStackTrace();
-					TPCMaster.exit();
-				}
+				getReturnValue = slaveAnswer.getValue();
 				// do housekeeping before returning
 				this.finished = true;
 				this.notifyAll();
 				return;
 			} else if (slaveAnswer.getMessage() != null){ // slave sent back an error message
-				value = null; // this line should do nothing, as value should already be null... but just in case
 				// TODO DOUG confirm that inheritance works here
 				message = slaveAnswer;
 
@@ -597,21 +577,14 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				slaveAnswer = sendReceiveSlaveGET(slaveServer, tpcMessage);
 
 				if (slaveAnswer.getValue() != null){ // successor slave sent back a good put response
-					try {
-						value = (V) TPCMessage.encodeObject(slaveAnswer.getValue());
-					} catch (KVException e) {
-						// should not happen
-						e.printStackTrace();
-						TPCMaster.exit();
-					}
+					getReturnValue = slaveAnswer.getValue();
 					// do housekeeping before returning
 					this.finished = true;
 					this.notifyAll();
 					return;
 				} else if (slaveAnswer.getMessage() != null){ // successor slave sent back an error message
-					value = null; // this line should do nothing, as value should already be null... but just in case
 					// set message to incorporate BOTH error messages
-					message = new KVMessage("@"+slaveServer.getSlaveID()+"=>"+message.getMessage()+"\n@"+successor.getSlaveID()+"=>"+slaveAnswer.getMessage());
+					abortMessage = "@"+slaveServer.getSlaveID()+"=>"+message.getMessage()+"\n@"+successor.getSlaveID()+"=>"+slaveAnswer.getMessage();
 				} else {
 					// this should not happen
 					System.err.println("getreq: successor slave didn't have a value or a message");
@@ -693,16 +666,36 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			l1 = _l1;
 			l2 = _l2;
 			l3 = _l3;
-			l1.lock();
-			l3.lock();
 		}
 		@Override
 		public void run() {
+			l1.lock();
+			l3.lock();
+			// should only have 3 threads running, so if you yield twice, hopefully that'll get the next thread
+			Thread.yield();
+			Thread.yield();
 			while (true) {
 				switch (TPCState) {
 
 				// send the appropriate message to client 
 				case INIT:
+
+					//synch
+					boolean gotl2 = l2.tryLock();
+					if (!gotl2){//other thread still holds its l1 lock
+						l1.unlock();//release my lock
+						l2.lock();//sleep until other thread releases lock
+						l2.unlock();//Now no threads should hold locks
+					} else {//Now I hold l1 and l2, other thread is ahead of me
+						l2.unlock();//Now release both locks so other thread can wake and continue
+						l1.unlock();
+					}
+
+					//after synched up, acquire original lock again
+					l1.lock();
+					Thread.yield();
+					Thread.yield();
+
 					// Sanity Check
 					if (!"putreq".equals(message.getMsgType()) && !"delreq".equals(message.getMsgType())){
 						System.err.println("INIT did not get a putreq or delreq");
@@ -722,8 +715,8 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							TPCState = EState.ABORT;
 							TPCStateLock.unlock();
 							response = new TPCMessage(new KVMessage("Timeout Error: SlaveServer "+ slaveServerInfo.getSlaveID() +" has timed out during the first phase of 2PC"), "-1");
-							
-							
+
+
 							boolean gotl2 = l2.tryLock();
 							if (!gotl2){//other thread still holds its l1 lock
 								l1.unlock();//release my lock
@@ -748,22 +741,26 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 
 					if (slaveResponse.getMsgType().equals("abort")){
-						response = new TPCMessage(new KVMessage (slaveResponse.getMessage()), "-1");
+						if (abortMessage.equals("")){
+							abortMessage += "@"+slaveServerInfo.getSlaveID()+"=>"+slaveResponse.getMessage();
+						} else {
+							abortMessage += "\n@"+slaveServerInfo.getSlaveID()+"=>"+slaveResponse.getMessage();
+						}
+
 						TPCStateLock.lock();
 						TPCState = EState.ABORT;
 						TPCStateLock.unlock();
-/*						if (TPCState == EState.INIT){
+						/*						if (TPCState == EState.INIT){
 							// other thread is has not finished yet
 							TPCState = EState.ABORT;
 							TPCStateLock.unlock();
-						
+
 						} else {
 							// if the other thread already finished and is waiting
 							TPCState = EState.ABORT;
 							TPCStateLock.unlock();
 						}*/
 					} else if ("ready".equals(slaveResponse.getMsgType())){
-						response = new TPCMessage(new KVMessage ("ready"), "-1");
 						if (TPCState != EState.ABORT){
 							TPCStateLock.lock();
 							TPCState = EState.COMMIT;
@@ -792,16 +789,16 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 									}
 								}
 								TPCStateLock.unlock();//Unlock after waking up, re-acquires lock after signal is called
-							*/
+						 */
 					} else {
 						// this should not happen
 						System.err.println("Coordinator did not get a ready or abort response");
 						TPCMaster.exit();
 					}
-					
+
 					//synch
-					boolean gotl2 = l2.tryLock();
-					if (!gotl2){//other thread still holds its l1 lock
+					boolean gotl22 = l2.tryLock();
+					if (!gotl22){//other thread still holds its l1 lock
 						l1.unlock();//release my lock
 						l2.lock();//sleep until other thread releases lock
 						l2.unlock();//Now no threads should hold locks
@@ -878,24 +875,20 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				e.printStackTrace();
 				TPCMaster.exit();
 			}
-			
+
 			slaveResponse = TPCMessage.sendReceive(slaveSocket, opRequest);
 
-//			// send the put/get request to slave
-//			TPCMessage.sendMessage(slaveSocket, opRequest);
-//
-//			// receive a response from slave
-//			// Correctness Constraint: slaveAnswer is either a ready response or an abort response
-//			try {
-//				slaveResponse = TPCMessage.receiveMessage(slaveSocket);
-//			} catch (SocketTimeoutException e) {
-//				throw e;
-//			}
+			//			// send the put/get request to slave
+			//			TPCMessage.sendMessage(slaveSocket, opRequest);
+			//
+			//			// receive a response from slave
+			//			// Correctness Constraint: slaveAnswer is either a ready response or an abort response
+			//			try {
+			//				slaveResponse = TPCMessage.receiveMessage(slaveSocket);
+			//			} catch (SocketTimeoutException e) {
+			//				throw e;
+			//			}
 			return slaveResponse;
-		}
-
-		public TPCMessage getResponse(){
-			return response;
 		}
 	}
 
@@ -1021,35 +1014,89 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	public static void exit(){
 		System.exit(1);
 	}
-	
-	public KVMessage handleIgnore (TPCMessage inputMessage){
+
+	public void handleIgnore (KVMessage inputMessage, Socket client) throws KVException{
+
+		// Sanity Check
+		if (!"ignoreNext".equals(inputMessage.getMsgType())){
+			System.err.println("handleIgnore called without a ignoreNext");
+			TPCMaster.exit();
+		}
+
+		// get SlaveID
 		Long slaveServerID = Long.decode(inputMessage.getMessage());
 		SlaveInfo slave = consistentHash.get(slaveServerID);
 		if (slave == null){
-			return new KVMessage("IgnoreNext Error: Invalid SlaveServerID");
+			throw new KVException(new KVMessage("IgnoreNext Error: Invalid SlaveServerID"));
 		}
-		Socket slaveSocket = null;
+
+		// convert to a TPCMessage
+		TPCMessage tpcMessage = new TPCMessage (inputMessage, "-1");
+
+		// add ignoreRunnable to threadpool
 		try {
-			slaveSocket = new Socket(slave.hostName, slave.port);
-		} catch (UnknownHostException e) {
+			threadpool.addToQueue(new ignoreRunnable<K,V>(tpcMessage, slave, client));
+		} catch (InterruptedException e) {
 			// should not happen
 			e.printStackTrace();
 			TPCMaster.exit();
-		} catch (IOException e) {
-			// should not happen
-			e.printStackTrace();
-			TPCMaster.exit();
 		}
-		TPCMessage.sendMessage(slaveSocket, inputMessage);
-		TPCMessage response = null;
-		try {
-			response = TPCMessage.receiveMessage(slaveSocket);
-		} catch (SocketTimeoutException e) {
-			System.err.println("ignoreNext requests should time out");
-			e.printStackTrace();
-			TPCMaster.exit();
+		return;
+	}
+
+	class ignoreRunnable<K extends Serializable, V extends Serializable> implements Runnable {
+		TPCMessage message;
+		SlaveInfo slaveServerInfo;
+		Socket client;
+
+		public ignoreRunnable (TPCMessage msg, SlaveInfo slave, Socket client){
+			this.message = msg;
+			this.slaveServerInfo = slave;
+			this.client = client;
 		}
-		return new KVMessage(response.getMessage());	
+
+		@Override
+		public void run(){
+
+			// create connection to slaveServer
+			Socket slaveServer = null;
+			try {
+				slaveServer = new Socket(slaveServerInfo.hostName, slaveServerInfo.port);
+			} catch (UnknownHostException e) {
+				// should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			} catch (IOException e) {
+				// should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+
+			// send/receive from slaveServer
+			TPCMessage slaveResponse = null;
+			try {
+				slaveResponse = TPCMessage.sendReceive(slaveServer, message);
+			} catch (SocketTimeoutException e) {
+				// should not timeout on ignoreNext call
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+
+			// send back to client
+			KVMessage clientResponse = new KVMessage(slaveResponse.getMessage());
+			KVMessage.sendMessage(client, clientResponse);
+
+			// close ports
+			try {
+				client.close();
+				slaveServer.close();
+			} catch (IOException e) {
+				// this should not happen
+				e.printStackTrace();
+				TPCMaster.exit();
+			}
+
+		}
 	}
 
 }
