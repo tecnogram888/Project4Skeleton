@@ -383,7 +383,7 @@ public class KVMessage{
 			// should NOT ever throw exception here
 			e.printStackTrace();
 		}
-		System.out.println("Sending... "+xmlFile);
+		System.out.println("Sending to Client: \n" + xmlFile + "\n\n");
 		out.println(xmlFile);
 		
 		try {
@@ -405,6 +405,7 @@ public class KVMessage{
 		try {
 			in = connection.getInputStream();
 			rtn = new KVMessage(in);
+			System.out.println("Received from Client: \n" + rtn.toXML() + "\n\n");
 			//in.close();
 		} catch (IOException e) {
 			// should NOT throw an exception here
