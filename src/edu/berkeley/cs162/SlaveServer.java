@@ -122,9 +122,10 @@ public class SlaveServer {
 		} catch (SocketException e) {
 			System.err.println("could not set socket timeout");
 		}
-		
 		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+server.getPort());
-		TPCMessage.sendMessage(register, regMsg);
+		TPCMessage response = TPCMessage.sendReceive(register, regMsg);
+				
+		/*TPCMessage.sendMessage(register, regMsg);
 		register.close();
 		try {
 			register = new Socket(masterHostName, registrationPort);
@@ -133,10 +134,11 @@ public class SlaveServer {
 		} catch(IOException e) {
 			System.err.println("could not create socket");
 		}
-		TPCMessage regAck = TPCMessage.receiveMessage(register);
+		TPCMessage regAck = TPCMessage.receiveMessage(register);*/
 		
-		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort)
+		if (response.getMsgType().equals("Successfully registered"+slaveID+"@"+masterHostName+":"+server.getPort())){
 			System.err.println("could not successfully register");
+		}
 	}
 
 }
