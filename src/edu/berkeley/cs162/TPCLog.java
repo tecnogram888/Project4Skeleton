@@ -30,6 +30,7 @@
 package edu.berkeley.cs162;
 
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -85,6 +86,8 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 		try {
 			inputStream = new ObjectInputStream(new FileInputStream(logPath));			
 			entries = (ArrayList<KVMessage>) inputStream.readObject();
+		} catch (FileNotFoundException e){
+			// TODO do nothing
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {
