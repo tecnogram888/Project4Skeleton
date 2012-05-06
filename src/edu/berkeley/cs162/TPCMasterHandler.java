@@ -82,9 +82,24 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 
-		if(!inputMessage.getMsgType().equals("getreq") && 
-				!inputMessage.getMsgType().equals("ignoreNext"))
-			tpcLog.appendAndFlush(inputMessage);
+		//don't think we need this anymore
+//		if(!inputMessage.getMsgType().equals("getreq") && 
+//				!inputMessage.getMsgType().equals("ignoreNext"))
+//			tpcLog.appendAndFlush(inputMessage);
+		
+		if (inputMessage.getMsgType().equals("putreq")) {
+			tpcLog.appendAndFlush(new TPCMessage("ready", inputMessage.getKey(), inputMessage.getValue(), "putreq", inputMessage.getTpcOpId()));
+		}
+		if (inputMessage.getMsgType().equals("delreq")) {
+			tpcLog.appendAndFlush(new TPCMessage("ready", inputMessage.getKey(), "delreq", inputMessage.getTpcOpId()));
+		}
+		if (inputMessage.getMsgType().equals("commit")) {
+			tpcLog.appendAndFlush(new TPCMessage("commit", inputMessage.getTpcOpId()));
+		}
+		if (inputMessage.getMsgType().equals("abort")) {
+			tpcLog.appendAndFlush(new TPCMessage("abort", inputMessage.getTpcOpId()));
+		}
+		
 		
 		switch (TPCState) {
 
