@@ -339,12 +339,15 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 
 		consistantHashLock.readLock().lock();
 		if (consistentHash.isEmpty()) { return null; }
-		SlaveInfo temp = consistentHash.get(
-				((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(hashedKey) );
-		if (temp == null) {
-			return consistentHash.get(
+		Long x = ((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(hashedKey);
+		if (x == null) {
+			
+			SlaveInfo temp = consistentHash.get(
 					((TreeMap<Long, SlaveInfo>) consistentHash).ceilingKey(consistentHash.firstKey()) );
+			consistantHashLock.readLock().unlock();
+			return temp;
 		}
+		SlaveInfo temp = consistentHash.get(x);
 		consistantHashLock.readLock().unlock();
 		return temp;
 	}
