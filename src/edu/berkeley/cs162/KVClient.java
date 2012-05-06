@@ -167,7 +167,6 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		if (valueString.isEmpty()) throw new KVException(new KVMessage("Empty value"));
 
 		KVMessage message = new KVMessage("putreq", keyString, valueString);
-		System.out.println("Value string is: " +valueString);
 
 		message = sendRecieve(message);
 
@@ -197,7 +196,6 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		}else if (message.getValue() == null){
 			throw new KVException(new KVMessage(message.getMessage()));
 		} else {
-			System.out.println("Receieved message is: "+message.getValue());
 			byte[] encryptedBytes = (byte[])KVMessage.decodeObject(message.getValue());
 			String valueString = null;
 			try {

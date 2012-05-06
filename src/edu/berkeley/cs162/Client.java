@@ -24,6 +24,7 @@ public class Client {
 				System.out.println(((KVException) e).getMsg().getMessage());
 				System.out.println("get returned null");
 			}
+			System.out.print("Did it retrieve the right string? " + client.get("Test 0").equals("Test 1"));
 			/*			
 			System.out.println("put Testi, Testi+1: " + client.put("Test" + i, "Test" + (i+1)));
 			System.out.println("put Testi, Testi+2: " + client.put("Test" + i, "Test" + (i+2)));

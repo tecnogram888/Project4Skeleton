@@ -146,7 +146,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 		} else if ("getEnKey".equals(mess.getMsgType())){
 			KVMessage message = null;
 			try {
-				message = new KVMessage(tpcMaster.getMasterKey());
+				message = new KVMessage(KVMessage.encodeObject(tpcMaster.getMasterKey()));
 			} catch (KVException e) {
 				e.printStackTrace();
 			}
