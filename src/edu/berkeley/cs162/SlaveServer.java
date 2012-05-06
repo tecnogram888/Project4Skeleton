@@ -115,6 +115,9 @@ public class SlaveServer {
 			System.err.println("could not create socket");
 		}
 		try {
+			// assume Master is immortal
+			// TODO uncomment below line
+			// register.setSoTimeout(0);
 			register.setSoTimeout(5000);
 		} catch (SocketException e) {
 			System.err.println("could not set socket timeout");
