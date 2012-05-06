@@ -117,7 +117,8 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					threadpool.addToQueue(new putRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
 							(V)TPCMessage.decodeObject(inputMessage.getValue()), 
-							keyserver, master, inputMessage.getTpcOpId(), inputMessage));			
+							keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+					break;
 				} catch (InterruptedException e) {
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
@@ -149,6 +150,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					threadpool.addToQueue(new delRunnable<K,V>(
 							(K)TPCMessage.decodeObject(inputMessage.getKey()), 
 							keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+					break;
 				} catch (InterruptedException e) {
 					// send Abort response
 					TPCMessage abortMsg = new TPCMessage("abort", "Unknown Error: InterruptedException from the threadpool", inputMessage.getTpcOpId(), false);
@@ -212,6 +214,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						(K)TPCMessage.decodeObject(inputMessage.getKey()), 
 						(V)TPCMessage.decodeObject(inputMessage.getValue()), 
 						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+				break;
 			} catch (InterruptedException e) {
 				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had an InterruptedException");
@@ -255,6 +258,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				threadpool.addToQueue(new delRunnable<K,V>(
 						(K)TPCMessage.decodeObject(inputMessage.getKey()), 
 						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
+				break;
 			} catch (InterruptedException e) {
 				// TODO figure out what to do here
 				System.err.println("DEL_WAIT had an InterruptedException");

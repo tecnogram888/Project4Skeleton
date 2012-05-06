@@ -190,7 +190,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 	SecretKey masterKey = null;
 
 	// Timeout value used during 2PC operations
-	private static final int TIMEOUT_MILLISECONDS = 5000;
+	private static final int TIMEOUT_MILLISECONDS = 0;
 
 	// Cache stored in the Master/Coordinator Server
 	private KVCache<K, V> masterCache = new KVCache<K, V>(1000);
