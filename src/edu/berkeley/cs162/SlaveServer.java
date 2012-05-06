@@ -122,17 +122,15 @@ public class SlaveServer {
 		
 		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+server.getPort());
 		TPCMessage.sendMessage(register, regMsg);
-		
-		TPCMessage regAck = null;
-		// read registration ACK from TPCMaster
+		register.close();
 		try {
-			regAck = new TPCMessage(register.getInputStream());
-		} catch (KVException e) {
-			System.err.println("error reading registration message");
-		} catch (IOException e) {
-			e.printStackTrace();
-			System.err.println("error reading input stream");
-		}//TODO How to handle these errors?
+			register = new Socket(masterHostName, registrationPort);
+		} catch(UnknownHostException e) {
+			System.err.println("could not connect");
+		} catch(IOException e) {
+			System.err.println("could not create socket");
+		}
+		TPCMessage regAck = TPCMessage.receiveMessage(register);
 		
 		if (regAck.getMessage()!="Successfully registered"+slaveID+"@"+masterHostName+":"+masterPort)
 			System.err.println("could not successfully register");
