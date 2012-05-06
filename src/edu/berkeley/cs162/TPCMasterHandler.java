@@ -82,9 +82,10 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 
-		if(!inputMessage.getMsgType().equals("getreq") && 
-				!inputMessage.getMsgType().equals("ignoreNext"))
-			tpcLog.appendAndFlush(inputMessage);
+		//don't think we need this anymore
+//		if(!inputMessage.getMsgType().equals("getreq") && 
+//				!inputMessage.getMsgType().equals("ignoreNext"))
+//			tpcLog.appendAndFlush(inputMessage);
 		
 		if (inputMessage.getMsgType().equals("putreq")) {
 			tpcLog.appendAndFlush(new TPCMessage("ready", inputMessage.getKey(), inputMessage.getValue(), "putreq", inputMessage.getTpcOpId()));
