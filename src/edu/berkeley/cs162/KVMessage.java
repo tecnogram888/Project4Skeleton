@@ -83,9 +83,14 @@ public class KVMessage{
 	// added by luke
 	Text text;
 	
-	public KVMessage(String msgType, String key) {
+	// key or ignoreNext
+	public KVMessage(String msgType, String keyORslaveID) {
 		this.msgType = msgType;
-		this.key = key;
+		if (msgType.equals("ignoreNext")){
+			this.message = keyORslaveID;
+		} else{
+			this.key = keyORslaveID;
+		}
 		this.value = null;
 	}
 	
@@ -149,6 +154,14 @@ public class KVMessage{
 	    public void close() {} // ignore close
 	}
 	
+	public String getElementsTag (String tag, Element x){
+		NodeList nodeList = x.getElementsByTagName(tag);
+		if (nodeList.getLength() != 0){ 
+			return getTagValue(tag, x);
+		} else {
+			return null;
+		}
+	}
 
 	  private static String getTagValue(String sTag, Element eElement) {
 			NodeList nlList = eElement.getElementsByTagName(sTag).item(0).getChildNodes();
@@ -194,36 +207,12 @@ public class KVMessage{
 			Element typeElement = (Element) typeNode;
 
 			msgType = typeElement.getAttribute("type");
-			if (msgType.equals("resp")){ // KVMessage is an incoming response from the server
-/*				NodeList statusList = typeElement.getElementsByTagName("Status");
-				if (statusList.getLength() != 0){ 
-					String temp = getTagValue("Status", typeElement);
-					if (temp.equals("True")){ status = true;}
-					else{ status = false;}
-				}*/
-				
-				NodeList messageList = typeElement.getElementsByTagName("Message");
-				if (messageList.getLength() != 0){ 
-					message = getTagValue("Message", typeElement);
-				} else{
-					key = getTagValue("Key", typeElement);
-					value = getTagValue("Value", typeElement);
-				}
-				
-			} else if(msgType.equals("getEnKey")){
-				// done
-				return;
-			}	else { // KVMessage is an outgoing message to the server
-				key = getTagValue("Key", typeElement);
-				NodeList valueList = typeElement.getElementsByTagName("Value");
-				if (valueList.getLength() != 0){
-					value = getTagValue("Value", typeElement);
-				}
-				
-				if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
-			}
-	         
-	
+			
+			key = getElementsTag("Key", typeElement);
+
+			value = getElementsTag("Value", typeElement);
+
+			message = getElementsTag("Message", typeElement);
 	}
 	
 	/**
