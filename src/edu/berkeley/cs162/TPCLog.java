@@ -142,7 +142,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 			TPCMessage msg = (TPCMessage) entries.get(x);
 
 			//check if there is no following abort / commit tpc message (interrupted) 
-			if (entries.size()-1 == x) {
+			if (entries.size()-1 == x || entries.get(x+1) == null) {
 				interruptedTpcOperation = entries.get(x); 
 				x++;
 			} else {
@@ -150,7 +150,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 
 				//execute message in log
 				TPCMessage nextMsg = (TPCMessage) entries.get(x+1);
-				if (msg.getMsgType().equals("putreq")) {
+				if (msg.getMessage().equals("putreq")) {
 					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
 						if (nextMsg.getMsgType().equals("commit")) {
 							try {
@@ -167,7 +167,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 						throw new KVException (new KVMessage ("Error-- TPCOpID does not match!"));
 					}
 				}
-				else if (msg.getMsgType().equals("delreq")) {
+				else if (msg.getMessage().equals("delreq")) {
 					if (msg.getTpcOpId().equals(nextMsg.getTpcOpId())) {
 						if (nextMsg.getMsgType().equals("commit")) {
 							try {
