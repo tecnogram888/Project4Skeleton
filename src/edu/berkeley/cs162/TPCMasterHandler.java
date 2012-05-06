@@ -192,6 +192,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				}
 			} else if (inputMessage.getMsgType().equals("ignoreNext")){
 				ignoreNext = true;
+				System.out.println("ignoreNext set to true!");
 				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
 				sendMessage(master, response);
 				return;
