@@ -180,6 +180,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCMaster.exit();
 				break;
 			}
+			break;
 
 		case PUT_WAIT: 
 			// Sanity Check... make sure the message is a commit or abort message
@@ -226,7 +227,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCMaster.exit();
 				return;
 			}
-
 		case DEL_WAIT: 
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
@@ -476,7 +476,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					TPCStateLock.unlock();
 					break;
 				}
-
 			case COMMIT:
 				/* Correctness Constraints:
 				 * key is definitely in keyserver

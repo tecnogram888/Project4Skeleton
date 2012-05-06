@@ -813,6 +813,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						System.err.println("Coordinator did not get a ready or abort response");
 						TPCMaster.exit();
 					}
+					break;
 
 				case ABORT:
 					TPCMessage abortMessage = new TPCMessage("abort", message.getTpcOpId());
@@ -835,7 +836,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					b1 = true;//Finished Abort section
 					otherThreadDone.notifyAll();
 					return;
-
 				case COMMIT:
 					TPCMessage commitMessage = new TPCMessage("commit", message.getTpcOpId());
 					TPCMessage commitAck;
