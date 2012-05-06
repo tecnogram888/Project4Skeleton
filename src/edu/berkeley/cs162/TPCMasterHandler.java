@@ -77,7 +77,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		//TODO SOLOMON: ARE THERE ANY LOCKS IN HANDLE? I THINK THERE AREN'T, BUT CAN YOU DOUBLE-CHECK?
 		
 		// assume master is immortal
-		// TODO uncommen line below
+		// TODO uncomment line below
 		// master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
@@ -166,7 +166,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 					TPCStateLock.unlock();
 					break;
 				}
-			} if (inputMessage.getMsgType().equals("ignoreNext")){
+			} else if (inputMessage.getMsgType().equals("ignoreNext")){
 				ignoreNext = true;
 				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
 				TPCMessage.sendMessage(master, response);
