@@ -210,7 +210,7 @@ public class KVMessage{
 					value = getTagValue("Value", typeElement);
 				}
 				
-			} if(msgType.equals("getEnKey")){
+			} else if(msgType.equals("getEnKey")){
 				// done
 				return;
 			}	else { // KVMessage is an outgoing message to the server
@@ -391,7 +391,7 @@ public class KVMessage{
 			// should NOT ever throw exception here
 			e.printStackTrace();
 		}
-		out.close();
+		//out.close();
 	}
 	
 	/** utility function that receives a KVMessage across a socket
@@ -404,7 +404,7 @@ public class KVMessage{
 		try {
 			in = connection.getInputStream();
 			rtn = new KVMessage(in);
-			in.close();
+			//in.close();
 		} catch (IOException e) {
 			// should NOT throw an exception here
 			e.printStackTrace();

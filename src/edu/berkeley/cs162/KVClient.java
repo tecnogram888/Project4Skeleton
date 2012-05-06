@@ -110,8 +110,8 @@ public class KVClient<K extends Serializable, V extends Serializable> implements
 		}
 		try {
 			//TODO uncomment line below, assume Master is immortal
-			//connection.setSoTimeout(0);
-			connection.setSoTimeout(15000);
+			connection.setSoTimeout(0);
+			//connection.setSoTimeout(15000);
 		} catch (SocketException e1) {
 			throw new KVException(new KVMessage("Unknown Error: Could net set Socket timeout"));
 		}

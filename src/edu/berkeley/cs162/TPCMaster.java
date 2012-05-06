@@ -471,6 +471,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		ReentrantReadWriteLock accessLock = accessLocks.get(msg.getKey());
 		if (accessLock == null) {
 			accessLocks.put(msg.getKey(), new ReentrantReadWriteLock());
+			accessLock = accessLocks.get(msg.getKey());
 		}
 		accessLock.readLock().lock();
 

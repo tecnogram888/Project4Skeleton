@@ -78,7 +78,7 @@ public class KVClientHandler<K extends Serializable, V extends Serializable> imp
 	@SuppressWarnings("unchecked")
 	@Override
 	public void handle(Socket client) throws IOException {
-
+		System.out.println("At the start of KVClient.handle(), the socket is: " + client.isClosed());
 		KVMessage mess = null;
 		try {
 			mess = KVMessage.receiveMessage(client);
@@ -116,6 +116,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 	}
 	@Override
 	public void run() {
+		System.out.println("At the start of run, client is closed: " + client.isClosed());
 		if ("getreq".equals(mess.getMsgType())) {	
 			V value = null;
 			try {
@@ -157,6 +158,7 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			} catch (KVException e) {
 				e.printStackTrace();
 			}
+
 			KVMessage.sendMessage(client, message);	
 
 			// client will be closed at the end
