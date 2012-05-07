@@ -159,7 +159,6 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 		} else if (mess.getMsgType().equals("putreq") || mess.getMsgType().equals("delreq")) {
 			boolean isPutReq = mess.getMsgType().equals("putreq");
 			try {
-				System.out.println("performTPCOperation called\n");
 				tpcMaster.performTPCOperation(mess, isPutReq);
 			} catch (KVException e) {
 				KVMessage.sendMessage(client, e.getMsg());

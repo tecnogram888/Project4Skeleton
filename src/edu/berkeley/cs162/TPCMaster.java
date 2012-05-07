@@ -423,9 +423,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			e.printStackTrace();
 			TPCMaster.exit();
 		}
-		
-		System.out.println(TPCState);
-		
+				
 		synchronized(currentTpcOpId){
 			while (allDone < 2){
 				try {
@@ -457,14 +455,10 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			String temp = abortMessage;
 			abortMessage = "";
 			accessLock.writeLock().unlock();
-			System.out.println("transactionLock unlocked");
 			transactionLock.unlock();
-			System.out.println(temp);
-			System.out.println("KVAbort Exception " + new KVMessage(temp).toXML());
 			throw new KVException(new KVMessage(temp));
 		}
 		accessLock.writeLock().unlock();
-		System.out.println("transactionLock unlocked");
 		transactionLock.unlock();
 		return success;
 	}
@@ -500,7 +494,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 		V value = masterCache.get((K) KVMessage.decodeObject(msg.getKey()));
 
 		if (value == null) {
-			System.out.println("Not in cache...");
 			SlaveInfo firstReplica = findFirstReplica((K)KVMessage.decodeObject(msg.getKey()));
 			SlaveInfo successor = findSuccessor(firstReplica);
 			Runnable tempGetRunnable = new getRunnable<K,V>(msg, firstReplica, successor, value);
@@ -605,7 +598,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					}
 					return;
 				} else if (slaveAnswer.getMessage() != null){ // successor slave sent back an error message
-					System.out.println("Both slaves returned error");
 					// set message to incorporate BOTH error messages
 					abortMessage = "@"+slaveServer.getSlaveID()+"=>"+message.getMessage()+"\n@"+successor.getSlaveID()+"=>"+slaveAnswer.getMessage();
 					synchronized(currentTpcOpId){
@@ -655,26 +647,26 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			}
 
 			// send the get request to slave
-			System.out.println("Sending to Slave " + slave.getSlaveID() + ":");
-			try {
-				System.out.println(getRequest.toXML()+"\n");
-			} catch (KVException e) {
-				e.printStackTrace();
-				TPCMaster.exit();
-			}
+//			System.out.println("Sending to Slave " + slave.getSlaveID() + ":");
+//			try {
+//				System.out.println(getRequest.toXML()+"\n");
+//			} catch (KVException e) {
+//				e.printStackTrace();
+//				TPCMaster.exit();
+//			}
 			TPCMessage.sendMessage(firstSlave, getRequest);
 
 			// receive a response from slave
 			// Correctness Constraint: slaveAnswer is either an error message or a get response
 			try {
 				slaveAnswer = TPCMessage.receiveMessage(firstSlave);
-				System.out.println("Received from Slave"+ slave.getSlaveID() + ":");
-				try {
-					System.out.println(slaveAnswer.toXML()+"\n");
-				} catch (KVException e) {
-					e.printStackTrace();
-					TPCMaster.exit();
-				}
+//				System.out.println("Received from Slave"+ slave.getSlaveID() + ":");
+//				try {
+//					System.out.println(slaveAnswer.toXML()+"\n");
+//				} catch (KVException e) {
+//					e.printStackTrace();
+//					TPCMaster.exit();
+//				}
 			} catch (SocketTimeoutException e) {
 				// as specified by Piazza post 876, GETS don't timeout, so this should never happen
 				System.err.println("Get request should not have timed out");
@@ -685,11 +677,11 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			// Sanity Check
 			if (!"resp".equals(slaveAnswer.getMsgType())){
 				System.err.println("getRunnable got a bad response:");
-				try {
-					System.out.println(slaveAnswer.toXML());
-				} catch (KVException e) {
-					e.printStackTrace();
-				}
+//				try {
+//					System.out.println(slaveAnswer.toXML());
+//				} catch (KVException e) {
+//					e.printStackTrace();
+//				}
 				TPCMaster.exit();
 			}	
 			return slaveAnswer;
@@ -779,7 +771,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 							TPCStateLock.lock();
 							TPCState = EState.COMMIT;
 							TPCStateLock.unlock();
-							System.out.println("set to COMMIT");
 						}
 					} else {
 						// this should not happen
@@ -884,19 +875,19 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				e.printStackTrace();
 				TPCMaster.exit();
 			}
-			try {
-				System.out.println("Sending to Slave " + slave.getSlaveID() + ":\n" + opRequest.toXML()+"\n");
-			} catch (KVException e) {
-				e.printStackTrace();
-				TPCMaster.exit();
-			}
+//			try {
+//				System.out.println("Sending to Slave " + slave.getSlaveID() + ":\n" + opRequest.toXML()+"\n");
+//			} catch (KVException e) {
+//				e.printStackTrace();
+//				TPCMaster.exit();
+//			}
 			slaveResponse = TPCMessage.sendReceive(slaveSocket, opRequest);
-			try {
-				System.out.println("Received from Slave " + slave.getSlaveID() + ":\n" + slaveResponse.toXML() + "\n");
-			} catch (KVException e) {
-				e.printStackTrace();
-				TPCMaster.exit();
-			}
+//			try {
+//				System.out.println("Received from Slave " + slave.getSlaveID() + ":\n" + slaveResponse.toXML() + "\n");
+//			} catch (KVException e) {
+//				e.printStackTrace();
+//				TPCMaster.exit();
+//			}
 			return slaveResponse;
 		}
 	}

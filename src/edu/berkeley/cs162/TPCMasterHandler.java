@@ -60,6 +60,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	private TPCMessage putDelMessage;
+	int i = 1;
 
 
 	public TPCMasterHandler(KeyServer<K, V> keyserver) {
@@ -73,18 +74,20 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 	@Override
 	public void handle(Socket master) throws IOException {
+		System.out.println(i);
+		i++;
 		
 		// assume master is immortal
 		 master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
-		System.out.println("Received from Master at Slave " + SlaveID + ":");
-		try {
-			System.out.println(inputMessage.toXML()+"\n");
-		} catch (KVException e) {
-			e.printStackTrace();
-			TPCMaster.exit();
-		}
+//		System.out.println("Received from Master at Slave " + SlaveID + ":");
+//		try {
+//			System.out.println(inputMessage.toXML()+"\n");
+//		} catch (KVException e) {
+//			e.printStackTrace();
+//			TPCMaster.exit();
+//		}
 		
 		if (inputMessage.getMsgType().equals("putreq")) {
 			tpcLog.appendAndFlush(new TPCMessage("ready", inputMessage.getKey(), inputMessage.getValue(), "putreq", inputMessage.getTpcOpId()));
@@ -121,7 +124,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
 					sendMessage(master, abortMsg);
-					System.out.println("ignoreNext set back to false!");
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
@@ -155,7 +157,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
 					sendMessage(master, abortMsg);
-					System.out.println("ignoreNext set back to false!");
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;
@@ -186,7 +187,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				}
 			} else if (inputMessage.getMsgType().equals("ignoreNext")){
 				ignoreNext = true;
-				System.out.println("ignoreNext set to true!");
 				TPCMessage response = new TPCMessage(new KVMessage("Success"), "-1");
 				sendMessage(master, response);
 				return;
@@ -201,7 +201,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		case PUT_WAIT: 
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
-				System.err.println("TPCMasterHandler in WAIT, but didn't get a commit or abort");
+				System.err.println("TPCMasterHandler in PUT_WAIT, but didn't get a commit or abort");
 				TPCMaster.exit();
 			}
 
@@ -244,7 +244,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		case DEL_WAIT: 
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
-				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+				System.err.println("TPCMasterHandler in DEL_WAIT, but didn't get a commit or abort");
 			}
 			
 			if (inputMessage.getMsgType().equals("commit")){
@@ -334,13 +334,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 			// send the TPCMessage to the master
 			// send the get request to slave
-			System.out.println("Sending to Master from Slave " + SlaveID + ":");
-			try {
-				System.out.println(TPCresponse.toXML()+"\n");
-			} catch (KVException e) {
-				e.printStackTrace();
-				TPCMaster.exit();
-			}
+//			System.out.println("Sending to Master from Slave " + SlaveID + ":");
+//			try {
+//				System.out.println(TPCresponse.toXML()+"\n");
+//			} catch (KVException e) {
+//				e.printStackTrace();
+//				TPCMaster.exit();
+//			}
 			sendMessage(master, TPCresponse);
 			try {
 				master.close();
@@ -403,8 +403,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			case COMMIT:
 				try {
 					keyserver.put(key, value);
-					System.out.println("Put " + key + ", " + value + " into keyServer!\n");
-					System.out.println(keyserver.get(key)+"\n");
 				} catch (KVException e) {
 					System.err.println("put COMMIT failed");
 					TPCMaster.exit();
@@ -499,7 +497,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				 */
 				try {
 					keyserver.del(key);
-					System.out.println("Deleted " + key + " from keyServer!\n");
 				} catch (KVException e) {
 					// this breaks the correctness constraint
 					System.err.println("Delete COMMIT failed when it wasn't supposed to");
@@ -566,13 +563,13 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	}
 	
 	private void sendMessage(Socket master, TPCMessage message){
-		System.out.println("Sending message to Master from Slave " + SlaveID + ":");
-		try {
-			System.out.println(message.toXML()+"\n");
-		} catch (KVException e) {
-			e.printStackTrace();
-			TPCMaster.exit();
-		}
+//		System.out.println("Sending message to Master from Slave " + SlaveID + ":");
+//		try {
+//			System.out.println(message.toXML()+"\n");
+//		} catch (KVException e) {
+//			e.printStackTrace();
+//			TPCMaster.exit();
+//		}
 		TPCMessage.sendMessage(master, message);
 	}
 
