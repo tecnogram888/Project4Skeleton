@@ -76,7 +76,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			try {
 				threadpool.addToQueue(new registrationRunnable(client));
 			} catch (InterruptedException e) {
-				// TODO How to handle this error?
 				e.printStackTrace();
 			}
 		}
@@ -100,7 +99,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 					System.err.println("error reading registration message");
 				} catch (IOException e) {
 					System.err.println("error reading input stream");
-				} //TODO How to handle these errors?
+				}
 
 				addToConsistentHash(newSlave);
 				if (consistentHash.size() >= listOfSlaves.length)
@@ -542,20 +541,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				accessLock.readLock().unlock();
 				return value;
 			}
-			// TODO not sure why we need synchronization there's only one thread
-			/*// TODO DOUG sleeping on threads
-			// value somehow gets set to the proper value
-			synchronized (tempGetRunnable) {
-				while(((getRunnable<K,V>) tempGetRunnable).getFinished() == false)
-					try {
-						tempGetRunnable.wait();
-					} catch (InterruptedException e) {
-						// should not happen
-						e.printStackTrace();
-						TPCMaster.exit();
-					}
-			}
-			value = ((getRunnable<K,V>) tempGetRunnable).getValue();*/
 		}
 		accessLock.readLock().unlock();
 		return value;
@@ -605,7 +590,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 				}
 				return;
 			} else if (slaveAnswer.getMessage() != null){ // slave sent back an error message
-				// TODO DOUG confirm that inheritance works here
 				message = slaveAnswer;
 
 				// contact Successor
@@ -663,9 +647,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 			// set timeout
 			try {
 				// as specified by Piazza post 876, GETS don't timeout
-				// TODO uncomment below line
-				// slave.setSoTimeout(0);
-				firstSlave.setSoTimeout(TIMEOUT_MILLISECONDS);
+				firstSlave.setSoTimeout(0);
 			} catch (SocketException e) {
 				// could not set timeout, should not happen
 				e.printStackTrace();
@@ -864,7 +846,6 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						break;
 					}
 					if (!"ack".equals(commitAck.getMsgType())){
-						//TODO Doug how to handle this error?
 						System.err.println("COMMIT did not get a correct ack");
 						System.exit(1);
 					}

@@ -177,7 +177,8 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 			// client will be closed at the end
 
 		} else {
-			//TODO throw Exception
+			System.err.println("processMessageRunnable called with bad message");
+			TPCMaster.exit();
 		}
 		try {
 			client.close();

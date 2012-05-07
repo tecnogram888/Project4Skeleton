@@ -87,7 +87,7 @@ public class TPCLog<K extends Serializable, V extends Serializable> {
 			inputStream = new ObjectInputStream(new FileInputStream(logPath));			
 			entries = (ArrayList<KVMessage>) inputStream.readObject();
 		} catch (FileNotFoundException e){
-			// TODO do nothing
+			// do nothing
 		} catch (Exception e) {
 			e.printStackTrace();
 		} finally {

@@ -76,16 +76,10 @@ public class TPCMessage extends KVMessage implements Serializable {
 	private String msgType = null;
 	private String key = null;
 	private String value = null;
-//	private boolean status = false;
 	private boolean isPutResp = false;
 	// Skeleton: private String status = null;
 	private String message = null;
 	private String tpcOpId = null;
-
-	// TODO fix this
-	/*	public KVMessage(String msgType) {
-		this.msgType = msgType;
-	}*/
 
 	// added by luke
 	Text text;
@@ -158,9 +152,8 @@ public class TPCMessage extends KVMessage implements Serializable {
 		} else if ("abort".equals(msgType)){
 			this.message = keyORmessage;
 		} else {
-			// TODO throw exception, SHOULD NOT EVER GET TO THIS PLACE
 			System.err.println("msgType not del request or abort");
-			System.exit(1);
+			TPCMaster.exit();
 		}
 	}
 
@@ -299,7 +292,6 @@ public class TPCMessage extends KVMessage implements Serializable {
 
 		tpcOpId = getElementsTag("TPCOpId", typeElement);
 
-		// TODO Do error checking?
 		if (msgType == "putreq" && value == null) throw new KVException (new KVMessage("XML Error: Received unparseable message"));
 	}
 

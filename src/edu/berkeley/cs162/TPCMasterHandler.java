@@ -73,12 +73,9 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 	@Override
 	public void handle(Socket master) throws IOException {
-
-		//TODO SOLOMON: ARE THERE ANY LOCKS IN HANDLE? I THINK THERE AREN'T, BUT CAN YOU DOUBLE-CHECK?
 		
 		// assume master is immortal
-		// TODO uncomment line below
-		// master.setSoTimeout(0);
+		 master.setSoTimeout(0);
 
 		TPCMessage inputMessage = TPCMessage.receiveMessage(master);
 		System.out.println("Received from Master at Slave " + SlaveID + ":");
@@ -88,11 +85,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			e.printStackTrace();
 			TPCMaster.exit();
 		}
-
-		//don't think we need this anymore
-//		if(!inputMessage.getMsgType().equals("getreq") && 
-//				!inputMessage.getMsgType().equals("ignoreNext"))
-//			tpcLog.appendAndFlush(inputMessage);
 		
 		if (inputMessage.getMsgType().equals("putreq")) {
 			tpcLog.appendAndFlush(new TPCMessage("ready", inputMessage.getKey(), inputMessage.getValue(), "putreq", inputMessage.getTpcOpId()));
@@ -200,7 +192,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				return;
 			} else {
 				// this should not happen.
-				// TODO DOUBLE-CHECK
 				System.err.println("TPCMasterHandler in NOSTATE, but didn't get a getreq, putreq, or delreq");
 				TPCMaster.exit();
 				break;
@@ -210,7 +201,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 		case PUT_WAIT: 
 			// Sanity Check... make sure the message is a commit or abort message
 			if (!inputMessage.getMsgType().equals("commit") && !inputMessage.getMsgType().equals("abort")){
-				System.err.println("TPCMasterHandler in WAIT, but didn't get a getreq, putreq, or delreq");
+				System.err.println("TPCMasterHandler in WAIT, but didn't get a commit or abort");
 				TPCMaster.exit();
 			}
 
@@ -242,12 +233,10 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
 				break;
 			} catch (InterruptedException e) {
-				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had an InterruptedException");
 				TPCMaster.exit();
 				return;
 			} catch (KVException e){
-				// TODO figure out what to do here
 				System.err.println("PUT_WAIT had a KVException: " + e.getMsg().getMessage());
 				TPCMaster.exit();
 				return;
@@ -285,11 +274,9 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 						keyserver, master, inputMessage.getTpcOpId(), inputMessage));
 				break;
 			} catch (InterruptedException e) {
-				// TODO figure out what to do here
 				System.err.println("DEL_WAIT had an InterruptedException");
 				break;
 			} catch (KVException e){
-				// TODO figure out what to do here
 				System.err.println("DEL_WAIT had a KVException: " + e.getMsg().getMessage());
 				break;
 			}		
@@ -355,7 +342,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				TPCMaster.exit();
 			}
 			sendMessage(master, TPCresponse);
-			// TODO should I still close it here, I close it in handle()
 			try {
 				master.close();
 			} catch (IOException e) {
@@ -542,7 +528,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 			}
 
 			try {
-				// TODO should I still close it here, I close it in handle()
 				master.close();
 			} catch (IOException e) {
 				// These ones don't send errors, this is a server error
