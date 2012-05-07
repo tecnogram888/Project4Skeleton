@@ -60,7 +60,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 	private EState TPCState = EState.NOSTATE;
 	private ReentrantLock TPCStateLock = new ReentrantLock();
 	private TPCMessage putDelMessage;
-	int i = 1;
 
 
 	public TPCMasterHandler(KeyServer<K, V> keyserver) {
@@ -74,8 +73,6 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 
 	@Override
 	public void handle(Socket master) throws IOException {
-		System.out.println(i);
-		i++;
 		
 		// assume master is immortal
 		 master.setSoTimeout(0);

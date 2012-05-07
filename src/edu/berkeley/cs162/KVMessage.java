@@ -372,7 +372,7 @@ public class KVMessage{
 			// should NOT ever throw exception here
 			e.printStackTrace();
 		}
-		System.out.println("Sending to Client: \n" + xmlFile + "\n\n");
+//		System.out.println("Sending to Client: \n" + xmlFile + "\n\n");
 		out.println(xmlFile);
 		
 		try {
