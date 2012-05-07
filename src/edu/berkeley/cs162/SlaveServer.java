@@ -35,6 +35,7 @@ import java.io.PrintWriter;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.SocketTimeoutException;
 import java.rmi.UnknownHostException;
 import java.util.UUID;
 
@@ -77,21 +78,26 @@ public class SlaveServer {
 		server.addHandler(handler);
 		server.connect();
 		System.out.println("Starting SlaveServer at " + server.getHostname() + ":" + server.getPort());
-		// fix me not to block
-		// create a runnable and thread for regServer
-				class socketServerRunnable implements Runnable {
-					public void run() {
-							try {
-								server.run();
-							} catch (IOException e) {
-								// TODO Handle this as a connection error... Basically just die?
-							}
-					
-					}
-				}
-				Thread socketServerThread = new Thread(new socketServerRunnable());
-				socketServerThread.start();
-		//server.run();
+//		// fix me not to block
+//		// create a runnable and thread for regServer
+//				class socketServerRunnable implements Runnable {
+//					KeyServer<String, String> keyServer = null;
+//
+//					public socketServerRunnable (KeyServer<String, String> keyServer){
+//						this.keyServer = keyServer;
+//					}
+//					public void run() {
+//							try {
+//								server.run();
+//							} catch (IOException e) {
+//								// TODO Handle this as a connection error... Basically just die?
+//							}
+//					
+//					}
+//				}
+//				Thread socketServerThread = new Thread(new socketServerRunnable(keyServer));
+//				socketServerThread.start();
+//		//server.run();
 		
 		// Create TPCLog
 		logPath = slaveID + "@" + server.getHostname();
@@ -123,7 +129,33 @@ public class SlaveServer {
 			System.err.println("could not set socket timeout");
 		}
 		regMsg = new TPCMessage("register", slaveID+"@"+masterHostName+":"+server.getPort());
-		TPCMessage response = TPCMessage.sendReceive(register, regMsg);
+		
+		
+		class registerRunnable implements Runnable {
+			Socket register = null;
+			TPCMessage regMsg = null;
+			
+			public registerRunnable (Socket register, TPCMessage regMsg){
+				this.register = register;
+				this.regMsg = regMsg;
+			}
+			public void run() {
+				TPCMessage response = null;
+				try {
+					response = TPCMessage.sendReceive(register, regMsg);
+				} catch (SocketTimeoutException e) {
+					// this will not happen, we assumed master is immortal
+					e.printStackTrace();
+				}
+				if (!response.getMsgType().equals("Successfully registered"+slaveID+"@"+masterHostName+":"+server.getPort())){
+					System.err.println("could not successfully register");
+				}
+			}
+		}
+		Thread registerThread = new Thread(new registerRunnable(register, regMsg));
+		registerThread.start();
+		
+//		TPCMessage response = TPCMessage.sendReceive(register, regMsg);
 				
 		/*TPCMessage.sendMessage(register, regMsg);
 		register.close();
@@ -134,13 +166,10 @@ public class SlaveServer {
 		} catch(IOException e) {
 			System.err.println("could not create socket");
 		}
-		TPCMessage regAck = TPCMessage.receiveMessage(register);*/
+		TPCMessage regAck = TPCMessage.receiveMessage(register);*/	
 		
+		server.run();
 
-		if (!response.getMsgType().equals("Successfully registered"+slaveID+"@"+masterHostName+":"+server.getPort())){
-
-			System.err.println("could not successfully register");
-		}
 	}
 
 }
