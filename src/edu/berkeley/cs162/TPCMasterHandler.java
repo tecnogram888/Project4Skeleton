@@ -129,6 +129,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
 					sendMessage(master, abortMsg);
+					System.out.println("ignoreNext set back to false!");
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.PUT_WAIT;
@@ -162,6 +163,7 @@ public class TPCMasterHandler<K extends Serializable, V extends Serializable> im
 				if (ignoreNext == true){
 					TPCMessage abortMsg = new TPCMessage("abort", "IgnoreNext Error: SlaveServer "+SlaveID+" has ignored this 2PC request during the first phase", inputMessage.getTpcOpId(), false);
 					sendMessage(master, abortMsg);
+					System.out.println("ignoreNext set back to false!");
 					ignoreNext = false;
 					TPCStateLock.lock();
 					TPCState = EState.DEL_WAIT;

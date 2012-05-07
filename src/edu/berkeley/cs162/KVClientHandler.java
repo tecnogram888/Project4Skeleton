@@ -162,7 +162,6 @@ class processMessageRunnable<K extends Serializable, V extends Serializable> imp
 				System.out.println("performTPCOperation called\n");
 				tpcMaster.performTPCOperation(mess, isPutReq);
 			} catch (KVException e) {
-				e.printStackTrace();
 				KVMessage.sendMessage(client, e.getMsg());
 				try {
 					client.close();

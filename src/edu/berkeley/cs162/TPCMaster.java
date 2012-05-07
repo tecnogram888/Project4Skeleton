@@ -523,6 +523,7 @@ public class TPCMaster<K extends Serializable, V extends Serializable>  {
 						TPCMaster.exit();
 					}
 				}
+				getFinished = false;
 			}
 
 			if (!abortMessage.equals("")) {
